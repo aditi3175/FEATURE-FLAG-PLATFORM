@@ -1,0 +1,19 @@
+{
+  "name": "@flagforge/sdk",
+  "version": "1.0.0",
+  "description": "JavaScript SDK for FlagForge feature flag platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["feature-flags", "a/b-testing", "experiments", "flagforge"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlagForge SDK Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #2d3748;
+      margin-bottom: 10px;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      color: #718096;
+      margin-bottom: 30px;
+    }
+
+    .demo-section {
+      background: #f7fafc;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .demo-section h2 {
+      color: #2d3748;
+      font-size: 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge.on {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+
+    .badge.off {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+
+    .flag-result {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .flag-key {
+      font-family: 'Monaco', monospace;
+      color: #805ad5;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .flag-reason {
+      color: #718096;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .loading {
+      text-align: center;
+      color: #718096;
+      padding: 40px;
+    }
+
+    .spinner {
+      border: 3px solid #e2e8f0;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .user-info {
+      background: #edf2f7;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .user-info strong {
+      color: #2d3748;
+    }
+
+    .user-id {
+      font-family: 'Monaco', monospace;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .error {
+      background: #fed7d7;
+      color: #742a2a;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    code {
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', monospace;
+      font-size: 13px;
+      color: #2d3748;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>🚩 FlagForge SDK Demo</h1>
+    <p class="subtitle">Real-time feature flag evaluation</p>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p>Initializing SDK and loading flags...</p>
+    </div>
+
+    <div id="content" style="display: none;">
+      <div class="user-info">
+        <strong>Current User:</strong>
+        <span class="user-id">demo-user-123</span>
+      </div>
+
+      <div class="demo-section">
+        <h2>🎨 Feature: New UI Design</h2>
+        <div id="new-ui-result" class="flag-result">
+          <div class="flag-key">new-ui-design</div>
+          <div id="new-ui-status"></div>
+          <div id="new-ui-reason" class="flag-reason"></div>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <h2>🔔 Feature: Push Notifications</h2>
+        <div id="notifications-result" class="flag-result">
+          <div class="flag-key">push-notifications</div>
+          <div id="notifications-status"></div>
+          <div id="notifications-reason" class="flag-reason"></div>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <h2>💎 Feature: Premium Features</h2>
+        <div id="premium-result" class="flag-result">
+          <div class="flag-key">premium-features</div>
+          <div id="premium-status"></div>
+          <div id="premium-reason" class="flag-reason"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="error" class="error" style="display: none;">
+      <strong>⚠️ Error:</strong>
+      <p id="error-message"></p>
+      <p style="margin-top: 12px; font-size: 14px;">
+        Make sure:
+        <br>• Backend server is running on <code>http://localhost:4000</code>
+        <br>• You've created a project and flags in the dashboard
+        <br>• Update the API key below
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    // INSTRUCTIONS:
+    // 1. Start your backend: cd server && npm run dev
+    // 2. Create a project in the dashboard
+    // 3. Create some flags (e.g., 'new-ui-design', 'push-notifications', 'premium-features')
+    // 4. Copy your project API key and paste it below
+
+    const API_KEY = 'YOUR_PROJECT_API_KEY_HERE'; // 👈 REPLACE THIS
+    const API_URL = 'http://localhost:4000';
+    const USER_ID = 'demo-user-123';
+
+    // Simple SDK implementation for demo (in production, use npm package)
+    class SimpleFlagSDK {
+      constructor(apiKey, apiUrl) {
+        this.apiKey = apiKey;
+        this.apiUrl = apiUrl;
+        this.flags = new Map();
+      }
+
+      async init() {
+        const response = await fetch(`${this.apiUrl}/api/flags`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch flags');
+        }
+        const allFlags = await response.json();
+        allFlags.forEach(flag => this.flags.set(flag.key, flag));
+      }
+
+      async evaluate(flagKey, userId) {
+        const response = await fetch(`${this.apiUrl}/api/evaluate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: this.apiKey, flagKey, userId })
+        });
+
+        return await response.json();
+      }
+    }
+
+    async function main() {
+      try {
+        const sdk = new SimpleFlagSDK(API_KEY, API_URL);
+        await sdk.init();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+
+        // Evaluate flags
+        const flags = ['new-ui-design', 'push-notifications', 'premium-features'];
+
+        for (const flagKey of flags) {
+          try {
+            const result = await sdk.evaluate(flagKey, USER_ID);
+            updateFlagDisplay(flagKey, result);
+          } catch (error) {
+            console.error(`Failed to evaluate ${flagKey}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error('SDK Error:', error);
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error-message').textContent = error.message;
+      }
+    }
+
+    function updateFlagDisplay(flagKey, result) {
+      const sanitizedKey = flagKey.replace(/-/g, '');
+      const statusEl = document.getElementById(`${sanitizedKey}-status`);
+      const reasonEl = document.getElementById(`${sanitizedKey}-reason`);
+
+      if (result.enabled) {
+        statusEl.innerHTML = '<span class="badge on">✓ ENABLED</span>';
+      } else {
+        statusEl.innerHTML = '<span class="badge off">✗ DISABLED</span>';
+      }
+
+      reasonEl.textContent = `Reason: ${result.reason}`;
+    }
+
+    // Run the demo
+    main();
+  </script>
+</body>
+
+</html>

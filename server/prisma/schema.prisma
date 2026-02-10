@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  apiKey    String   @unique @map("api_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  flags     Flag[]
+
+  @@map("projects")
+}
+
+model Flag {
+  id                String   @id @default(uuid())
+  projectId         String   @map("project_id")
+  key               String
+  description       String   @default("")
+  status            Boolean  @default(true)  // Global kill switch
+  rolloutPercentage Int      @default(0) @map("rollout_percentage")
+  targetingRules    Json     @default("{}") @map("targeting_rules")  // { "allowed_users": ["user1"] }
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@map("flags")
+}
