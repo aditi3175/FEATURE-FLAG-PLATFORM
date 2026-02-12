@@ -43,6 +43,7 @@ export class FlagForgeSDK {
   private flags: Map<string, FlagData> = new Map();
   private pollingTimer?: NodeJS.Timeout;
   private initialized = false;
+  private listeners: Set<() => void> = new Set();
 
   constructor(config: FlagForgeConfig) {
     this.config = {
@@ -96,6 +97,10 @@ export class FlagForgeSDK {
     }
 
     const result = this.evaluateFlag(flag, userId);
+    
+    // Log evaluation to analytics
+    this.logEvaluation(flagKey, result.enabled, userId);
+    
     return result.enabled;
   }
 
@@ -134,6 +139,9 @@ export class FlagForgeSDK {
         });
         
         console.log(`FlagForge: Loaded ${flags.length} flags`);
+        
+        // Notify listeners of flag changes (for React integration)
+        this.notifyListeners();
       } else {
         throw new Error(`Failed to fetch flags: ${response.status} ${response.statusText}`);
       }
@@ -202,16 +210,62 @@ export class FlagForgeSDK {
   }
 
   /**
+   * Subscribe to flag changes (for React integration)
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.unsubscribe(listener);
+  }
+
+  /**
+   * Unsubscribe from flag changes
+   */
+  unsubscribe(listener: () => void): void {
+    this.listeners.delete(listener);
+  }
+
+  /**
+   * Notify all listeners of flag changes
+   */
+  private notifyListeners(): void {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  /**
+   * Log flag evaluation to analytics backend
+   */
+  private logEvaluation(flagKey: string, result: boolean, userId: string): void {
+    // Fire and forget - don't block flag evaluation on analytics
+    const url = `${this.config.apiUrl}/api/v1/sdk/events`;
+    
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.config.apiKey,
+      },
+      body: JSON.stringify({
+        flagKey,
+        result,
+        userId,
+        environment: 'Production',
+      }),
+    }).catch((error) => {
+      // Silently fail analytics - don't impact user experience
+      console.debug('FlagForge: Analytics logging failed:', error);
+    });
+  }
+
+  /**
    * Fetch flags from the API
    */
   private async fetchFlags(): Promise<Response> {
-    const url = `${this.config.apiUrl}/api/flags`;
+    const url = `${this.config.apiUrl}/api/v1/sdk/flags`;
     
-    // In a real implementation, you'd pass the project filter via API key lookup
-    // For now, we'll fetch all flags and let the server filter by project via query param
     return fetch(url, {
       headers: {
         'Content-Type': 'application/json',
+        'x-api-key': this.config.apiKey,
       },
     });
   }

@@ -10,13 +10,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Will be hashed with bcrypt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  projects  Project[]
+
+  @@map("users")
+}
+
 model Project {
   id        String   @id @default(uuid())
   name      String
   apiKey    String   @unique @map("api_key")
   createdAt DateTime @default(now()) @map("created_at")
+  userId    String   @map("user_id")
   
   flags     Flag[]
+  evaluationEvents EvaluationEvent[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("projects")
 }
@@ -28,12 +44,28 @@ model Flag {
   description       String   @default("")
   status            Boolean  @default(true)  // Global kill switch
   rolloutPercentage Int      @default(0) @map("rollout_percentage")
+  environment       String   @default("Production") // Dev, Staging, Production
   targetingRules    Json     @default("{}") @map("targeting_rules")  // { "allowed_users": ["user1"] }
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@unique([projectId, key])
+  @@unique([projectId, key, environment])
   @@map("flags")
+}
+
+model EvaluationEvent {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  flagKey   String   @map("flag_key")
+  result    Boolean  @map("evaluation_result") @default(true)
+  timestamp DateTime @default(now())
+  environment String @default("Production")
+  userId    String?  @map("user_id")
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@map("evaluation_events")
 }

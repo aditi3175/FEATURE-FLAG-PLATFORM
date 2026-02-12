@@ -8,12 +8,20 @@
     "build": "tsc",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["feature-flags", "a/b-testing", "experiments", "flagforge"],
+  "keywords": [
+    "feature-flags",
+    "a/b-testing",
+    "experiments",
+    "flagforge"
+  ],
   "author": "",
   "license": "MIT",
-  "dependencies": {},
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.28",
+    "typescript": "^5.6.3"
   }
 }

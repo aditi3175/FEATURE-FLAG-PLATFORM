@@ -33,9 +33,10 @@ export async function getFlag(projectId: string, flagKey: string) {
   // Cache miss - fetch from database
   const flag = await prisma.flag.findUnique({
     where: {
-      projectId_key: {
+      projectId_key_environment: {
         projectId,
         key: flagKey,
+        environment: 'Production', // Default to Production environment
       },
     },
   });
