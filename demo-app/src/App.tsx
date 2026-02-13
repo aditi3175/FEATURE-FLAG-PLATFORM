@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import { FlagForgeProvider, useFlag, useFlagForgeLoading } from '../../sdk/src/react';
 
-// TODO: Replace this with a REAL API Key from your FlagForge Dashboard!
-// Go to: http://localhost:5173 -> Create Project -> Copy API Key
-const DEMO_API_KEY = 'ff_prod_2b968a29801ef11727a94d7675dcc0ce346b32c2b6250b6111d96fc50b4caff4'; 
+// API Key from environment variable (stored in .env file, not committed to git)
+// To set up: Copy .env.example to .env and add your API key from FlagForge Dashboard
+const DEMO_API_KEY = import.meta.env.VITE_FLAGFORGE_API_KEY || 'REPLACE_WITH_YOUR_API_KEY'; 
 
 function AppContent() {
   const [userId, setUserId] = useState('user-demo-123');
