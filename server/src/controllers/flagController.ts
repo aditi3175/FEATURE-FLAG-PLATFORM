@@ -133,7 +133,7 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
 export async function updateFlag(req: Request, res: Response): Promise<void> {
   try {
     const flagId = req.params.flagId as string;
-    const { key, description, status, rolloutPercentage, targetingRules } = req.body;
+    const { key, description, status, rolloutPercentage, targetingRules, environment } = req.body;
 
     // Validation
     if (rolloutPercentage !== undefined && (rolloutPercentage < 0 || rolloutPercentage > 100)) {
@@ -176,6 +176,7 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
     if (status !== undefined) updateData.status = status;
     if (rolloutPercentage !== undefined) updateData.rolloutPercentage = rolloutPercentage;
     if (targetingRules !== undefined) updateData.targetingRules = targetingRules;
+    if (environment !== undefined) updateData.environment = environment;
 
     const flag = await prisma.flag.update({
       where: { id: flagId },

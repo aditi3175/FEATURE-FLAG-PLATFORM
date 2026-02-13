@@ -60,6 +60,17 @@ const Analytics = () => {
     }
   }, [selectedProjectId, dateRange]);
 
+  // 3. Auto-refresh polling - fetch new data every 10 seconds
+  useEffect(() => {
+    if (!selectedProjectId) return;
+
+    const interval = setInterval(() => {
+      fetchAnalytics();
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedProjectId, dateRange]);
+
   const fetchAnalytics = async () => {
     setLoading(true);
     setError(null);
@@ -151,8 +162,14 @@ const Analytics = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-[#2c2420] mb-2">Analytics Dashboard</h1>
-          <p className="text-[#5e4b35]">Real-time insights into your feature flag usage.</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-[#2c2420] mb-2">Analytics Dashboard</h1>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs font-medium text-green-700">Live</span>
+            </div>
+          </div>
+          <p className="text-[#5e4b35]">Real-time insights into your feature flag usage. Auto-refreshes every 10s.</p>
         </div>
         
         <div className="flex gap-4">
@@ -231,23 +248,43 @@ const Analytics = () => {
                 </h3>
               </div>
               
-              <div className="h-64 flex items-end justify-between gap-2">
-                {data.trendData.map((item, i) => (
-                  <div key={i} className="flex-1 flex flex-col justify-end group relative">
-                    <div 
-                      className="w-full bg-[#f0e6d9] rounded-t-sm hover:bg-[#a67c52] transition-all duration-300 relative group-hover:shadow-lg"
-                      style={{ height: `${Math.max(item.value * 2, 10)}%` }} // Simple scaling
-                    >
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#2c2420] text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                        {item.value} calls
-                      </div>
-                    </div>
-                    {/* Only show label for every 3rd item if many items */}
-                    <div className="text-xs text-[#8c6b4a] mt-2 text-center truncate">
-                      {item.label}
-                    </div>
+              <div className="h-64 flex items-end justify-center gap-2">
+                {data.trendData.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center h-full text-[#8c6b4a] text-sm">
+                    No data available for this period
                   </div>
-                ))}
+                ) : (
+                  data.trendData.map((item, i) => {
+                    // Calculate height: scale relative to max, but cap at 70% for single points
+                    const maxValue = Math.max(...data.trendData.map(d => d.value), 1);
+                    const ratio = item.value / maxValue;
+                    const maxHeight = data.trendData.length === 1 ? 140 : 200; // 140px for single bar, 200px for multiple
+                    const heightPx = Math.max(ratio * maxHeight, 60); // Min 60px
+                    
+                    return (
+                      <div 
+                        key={i} 
+                        className="flex flex-col justify-end group relative"
+                        style={{ 
+                          flex: data.trendData.length === 1 ? '0 0 120px' : '1',
+                          maxWidth: data.trendData.length === 1 ? '120px' : 'none'
+                        }}
+                      >
+                        <div 
+                          className="w-full bg-[#a67c52] hover:bg-[#8c5e3c] rounded-t-lg transition-all duration-300 relative shadow-md"
+                          style={{ height: `${heightPx}px` }}
+                        >
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#2c2420] text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                            {item.value} calls
+                          </div>
+                        </div>
+                        <div className="text-xs text-[#8c6b4a] mt-2 text-center truncate font-medium">
+                          {item.label}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 

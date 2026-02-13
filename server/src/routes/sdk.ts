@@ -51,12 +51,8 @@ router.get('/flags', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Return flags for the project
-    res.json({
-      projectId: project.id,
-      projectName: project.name,
-      flags: project.flags,
-    });
+    // Return flags array directly (SDK expects array, not object)
+    res.json(project.flags);
   } catch (error) {
     console.error('Error fetching flags for SDK:', error);
     res.status(500).json({ error: 'Failed to fetch flags' });

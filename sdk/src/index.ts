@@ -1,5 +1,3 @@
-import * as crypto from 'crypto';
-
 export interface FlagForgeConfig {
   apiKey: string;
   apiUrl?: string;
@@ -28,7 +26,7 @@ export interface EvaluationResult {
  * ```typescript
  * const sdk = new FlagForgeSDK({
  *   apiKey: 'your-project-api-key',
- *   apiUrl: 'https://api.flagforge.com', // optional
+ *   apiUrl: 'https://api.flagforge.com', // optional,
  * });
  * 
  * await sdk.init();
@@ -199,14 +197,21 @@ export class FlagForgeSDK {
   }
 
   /**
-   * Deterministic hash function (MD5-based)
-   * Same algorithm as backend to ensure consistency
+   * Browser-compatible deterministic hash function
+   * Returns a number between 0-99 for percentage-based rollout
    */
   private hashUserFlag(userId: string, flagKey: string): number {
     const seed = `${userId}:${flagKey}`;
-    const hash = crypto.createHash('md5').update(seed).digest('hex');
-    const hashValue = parseInt(hash.substring(0, 8), 16);
-    return hashValue % 100;
+    let hash = 0;
+    
+    for (let i = 0; i < seed.length; i++) {
+      const char = seed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Ensure positive and return 0-99
+    return Math.abs(hash) % 100;
   }
 
   /**

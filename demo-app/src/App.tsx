@@ -9,19 +9,21 @@ import {
   Sun,
   X
 } from 'lucide-react';
-import { FlagForgeProvider, useFlag, useFlagForge } from './lib/flagforge';
+import { FlagForgeProvider, useFlag, useFlagForgeLoading } from '../../sdk/src/react';
 
-// Replace this with a REAL API Key from your dashboard!
-const DEMO_API_KEY = 'ff_prod_REPLACE_WITH_REAL_KEY'; 
+// TODO: Replace this with a REAL API Key from your FlagForge Dashboard!
+// Go to: http://localhost:5173 -> Create Project -> Copy API Key
+const DEMO_API_KEY = 'ff_prod_2b968a29801ef11727a94d7675dcc0ce346b32c2b6250b6111d96fc50b4caff4'; 
 
 function AppContent() {
-  const { userId, setUserId, refresh, loading, error, flags } = useFlagForge();
+  const [userId, setUserId] = useState('user-demo-123');
+  const loading = useFlagForgeLoading();
   
-  // Feature Flags
-  const showPromoBanner = useFlag('promo-banner', false);
-  const showProPlan = useFlag('show-pro-plan', false);
-  const isBetaTester = useFlag('beta-tester', false);
-  const enableNewsletter = useFlag('enable-newsletter', false);
+  // Feature Flags - now with userId parameter
+  const showPromoBanner = useFlag('promo-banner', userId);
+  const showProPlan = useFlag('show-pro-plan', userId);
+  const isBetaTester = useFlag('beta-tester', userId);
+  const enableNewsletter = useFlag('enable-newsletter', userId);
 
   // Local state for UI
   const [darkMode, setDarkMode] = useState(false);
@@ -36,7 +38,7 @@ function AppContent() {
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
 
-  if (loading && Object.keys(flags).length === 0) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f5f5f0] text-[#1a1512]">
         <div className="flex flex-col items-center gap-4">
@@ -220,16 +222,9 @@ function AppContent() {
         <div className="bg-black/90 backdrop-blur-md text-white p-4 rounded-xl shadow-2xl border border-white/10 w-80">
           <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${Object.keys(flags).length > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className="w-2 h-2 rounded-full bg-green-500" />
               <span className="font-mono text-xs font-bold uppercase tracking-wider">FlagForge Debug</span>
             </div>
-            <button 
-              onClick={() => refresh()} 
-              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-              title="Refresh Flags"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </button>
           </div>
           
           <div className="space-y-3">
@@ -255,26 +250,34 @@ function AppContent() {
 
             <div className="max-h-32 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
               <label className="text-[10px] uppercase tracking-wider text-gray-400 mb-1 block">
-                Active Flags ({Object.keys(flags).length})
+                Active Flags
               </label>
-              {Object.entries(flags).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between text-xs font-mono bg-white/5 px-2 py-1 rounded">
-                  <span className="opacity-80">{key}</span>
-                  <span className={value ? 'text-green-400' : 'text-red-400'}>
-                    {value.toString()}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs font-mono bg-white/5 px-2 py-1 rounded">
+                  <span className="opacity-80">promo-banner</span>
+                  <span className={showPromoBanner ? 'text-green-400' : 'text-red-400'}>
+                    {showPromoBanner.toString()}
                   </span>
                 </div>
-              ))}
-              {Object.keys(flags).length === 0 && !loading && (
-                <div className="text-xs text-red-400 italic">
-                  No flags found. Check API Key?
+                <div className="flex items-center justify-between text-xs font-mono bg-white/5 px-2 py-1 rounded">
+                  <span className="opacity-80">show-pro-plan</span>
+                  <span className={showProPlan ? 'text-green-400' : 'text-red-400'}>
+                    {showProPlan.toString()}
+                  </span>
                 </div>
-              )}
-              {error && (
-                 <div className="text-xs text-red-400">
-                  Error: {error}
+                <div className="flex items-center justify-between text-xs font-mono bg-white/5 px-2 py-1 rounded">
+                  <span className="opacity-80">beta-tester</span>
+                  <span className={isBetaTester ? 'text-green-400' : 'text-red-400'}>
+                    {isBetaTester.toString()}
+                  </span>
                 </div>
-              )}
+                <div className="flex items-center justify-between text-xs font-mono bg-white/5 px-2 py-1 rounded">
+                  <span className="opacity-80">enable-newsletter</span>
+                  <span className={enableNewsletter ? 'text-green-400' : 'text-red-400'}>
+                    {enableNewsletter.toString()}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
