@@ -113,40 +113,36 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-      <div 
-        className="rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-in fade-in zoom-in-95 duration-200"
-        style={{ backgroundColor: '#ffffff' }}
-      >
+    <div className="fixed inset-0 flex items-center justify-center z-50 p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bento-surface inner-glow rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative border border-white/5">
         {/* Header */}
-        <div className="p-6 border-b sticky top-0 bg-white z-10 flex items-center justify-between" style={{ borderColor: '#e5e7eb' }}>
+        <div className="p-5 border-b border-white/5 sticky top-0 bento-surface backdrop-blur-xl z-10 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-semibold mb-1" style={{ color: '#1a1512' }}>
+            <h2 className="text-sm font-semibold mb-0.5 text-white">
               {initialData ? 'Edit Feature Flag' : 'Create Feature Flag'}
             </h2>
-            <p className="text-sm" style={{ color: '#736a62' }}>
+            <p className="text-xs text-gray-500">
               {initialData ? 'Update your feature configuration' : 'Configure your new feature rollout'}
             </p>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 rounded-lg transition-colors hover:bg-gray-100"
-            style={{ color: '#736a62' }}
+            className="p-1.5 rounded-lg transition-colors hover:bg-white/5 text-gray-400 hover:text-white"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" strokeWidth={2} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-8">
+        <form onSubmit={handleSubmit} className="p-5 space-y-6">
           {/* 1. Basic Info */}
-          <section className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: '#a67c52' }}>
-              <Flag className="w-4 h-4" /> Basic Information
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
+              <Flag className="w-3.5 h-3.5" strokeWidth={2} /> Basic Information
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: '#1a1512' }}>Flag Key</label>
+                <label className="block text-xs font-medium mb-1 text-gray-400">Flag Key</label>
                 <input
                   type="text"
                   value={formData.key}
@@ -162,31 +158,14 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
                     setError(null);
                   }}
                   placeholder="e.g. new-checkout-flow"
-                  className={`w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 font-mono text-sm transition-all ${initialData ? 'cursor-not-allowed opacity-75' : ''}`}
-                  style={{ 
-                    borderColor: error && formData.key === '' ? '#ef4444' : '#e5e7eb', 
-                    color: initialData ? '#7d7d7d' : '#1a1512',
-                    backgroundColor: initialData ? '#f3f4f6' : '#f9f9f9'
-                  }}
-                  onFocus={(e) => {
-                    if (!initialData) {
-                      e.currentTarget.style.backgroundColor = '#ffffff';
-                      e.currentTarget.style.borderColor = '#a67c52';
-                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(166, 124, 82, 0.1)';
-                    }
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.backgroundColor = '#f9f9f9';
-                    e.currentTarget.style.borderColor = '#e5e7eb';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
+                  className={`w-full px-3 py-2 rounded-lg bento-surface border-white/5 focus:outline-none focus:border-[#f59e0b]/30 font-mono text-xs transition-all text-white placeholder-gray-600 ${initialData ? 'cursor-not-allowed opacity-50' : ''}`}
                 />
                 <div className="flex justify-between mt-1">
-                  <p className="text-xs" style={{ color: '#736a62' }}>
+                  <p className="text-[10px] text-gray-600">
                     Unique key (lowercase, numbers, hyphens only)
                   </p>
                   {formData.key && (
-                    <p className="text-xs font-mono" style={{ color: '#a67c52' }}>
+                    <p className="text-[10px] font-mono text-[#f59e0b]">
                       isEnabled('{formData.key}')
                     </p>
                   )}
@@ -194,164 +173,170 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1.5" style={{ color: '#1a1512' }}>Environment</label>
+                <label className="block text-xs font-medium mb-1 text-gray-400">Environment</label>
                 <select
                   value={formData.environment}
                   onChange={(e) => setFormData({ ...formData, environment: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 appearance-none bg-white"
-                  style={{ borderColor: '#e5e7eb', color: '#1a1512' }}
+                  className="w-full px-3 py-2 rounded-lg bento-surface border-white/5 text-white text-xs focus:outline-none focus:border-[#f59e0b]/30 transition-all"
                 >
-                  <option value="Development">Development</option>
-                  <option value="Staging">Staging</option>
                   <option value="Production">Production</option>
+                  <option value="Staging">Staging</option>
+                  <option value="Development">Development</option>
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1.5" style={{ color: '#1a1512' }}>Description</label>
+              <label className="block text-xs font-medium mb-1 text-gray-400">Description</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="What does this feature do?"
                 rows={2}
-                className="w-full px-4 py-2.5 rounded-xl border focus:outline-none focus:ring-2 resize-none"
-                style={{ borderColor: '#e5e7eb', color: '#1a1512' }}
+                className="w-full px-3 py-2 rounded-lg bento-surface border-white/5 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#f59e0b]/30 transition-all resize-none"
               />
             </div>
           </section>
 
-          <hr className="border-t" style={{ borderColor: '#f3f4f6' }} />
-
-          {/* 2. Rollout Strategy */}
-          <section className="space-y-6">
-            <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: '#a67c52' }}>
-              <Shield className="w-4 h-4" /> Rollout Strategy
+          {/* 2. Status & Rollout */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
+              <Shield className="w-3.5 h-3.5" strokeWidth={2} /> Status & Rollout
             </h3>
 
-            <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: '#e5e7eb', backgroundColor: '#f9fafb' }}>
-              <div>
-                <h4 className="font-medium mb-1" style={{ color: '#1a1512' }}>Global Kill Switch</h4>
-                <p className="text-sm" style={{ color: '#736a62' }}>Master toggle to enable/disable this feature</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, status: !formData.status })}
-                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${formData.status ? 'bg-[#a67c52]' : 'bg-gray-300'}`}
-              >
-                <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${formData.status ? 'translate-x-6' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            <div className={`${!formData.status && 'opacity-50 pointer-events-none transition-opacity'}`}>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium" style={{ color: '#1a1512' }}>Percentage Rollout</label>
-                <div className="px-2 py-1 rounded bg-[#f5f5f0] text-sm font-mono font-bold" style={{ color: '#a67c52' }}>
-                  {formData.rolloutPercentage}%
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-3 rounded-lg bento-surface border border-white/5">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-400">Feature Status</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, status: !formData.status })}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      formData.status ? 'bg-emerald-500' : 'bg-gray-700'
+                    }`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      formData.status ? 'translate-x-5' : 'translate-x-0.5'
+                    }`}/>
+                  </button>
                 </div>
+                <p className="text-[10px] text-gray-600">
+                  {formData.status ? 'Enabled - Users will see this feature' : 'Disabled - Feature is hidden'}
+                </p>
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                value={formData.rolloutPercentage}
-                onChange={(e) => setFormData({ ...formData, rolloutPercentage: parseInt(e.target.value) })}
-                className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                style={{
-                  background: `linear-gradient(to right, #a67c52 0%, #a67c52 ${formData.rolloutPercentage}%, #e5e7eb ${formData.rolloutPercentage}%, #e5e7eb 100%)`
-                }}
-              />
-              <div className="flex justify-between text-xs mt-1" style={{ color: '#736a62' }}>
-                <span>0% (Off)</span>
-                <span>50%</span>
-                <span>100% (All Users)</span>
+
+              <div className="p-3 rounded-lg bento-surface border border-white/5">
+                <label className="text-xs font-medium mb-1.5 block text-gray-400">
+                  Rollout: {formData.rolloutPercentage}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={formData.rolloutPercentage}
+                  onChange={(e) => setFormData({ ...formData, rolloutPercentage: parseInt(e.target.value) })}
+                  className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#f59e0b]"
+                />
+                <p className="text-[10px] text-gray-600 mt-1">
+                  {formData.rolloutPercentage}% of users will see this feature
+                </p>
               </div>
             </div>
           </section>
-
-          <hr className="border-t" style={{ borderColor: '#f3f4f6' }} />
 
           {/* 3. Targeting Rules */}
-          <section className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: '#a67c52' }}>
-              <AlertTriangle className="w-4 h-4" /> Targeting Rules
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
+              <Info className="w-3.5 h-3.5" strokeWidth={2} /> User Targeting (Optional)
             </h3>
-            
-            <div className="bg-[#f5f5f0] rounded-xl p-4 border" style={{ borderColor: '#e5e5e0' }}>
-              <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
-                Specific User IDs
-                <span className="ml-2 text-xs font-normal opacity-70">(Overrides percentage rollout)</span>
+
+            <div className="p-3 rounded-lg bento-surface border border-white/5">
+              <label className="block text-xs font-medium mb-1.5 text-gray-400">
+                Allowed Users
               </label>
-              
-              <div className="flex gap-2 mb-3">
+              <div className="flex gap-2 mb-2">
                 <input
                   type="text"
                   value={targetingInput}
                   onChange={(e) => setTargetingInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTargetUser())}
-                  placeholder="Enter user IDs (comma separated)"
-                  className="flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 text-sm"
-                  style={{ borderColor: '#e5e7eb' }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTargetUser();
+                    }
+                  }}
+                  placeholder="user@example.com (comma-separated)"
+                  className="flex-1 px-3 py-2 rounded-lg bento-surface border-white/5 text-white text-xs placeholder-gray-600 focus:outline-none focus:border-[#f59e0b]/30 transition-all"
                 />
                 <button
                   type="button"
                   onClick={addTargetUser}
-                  disabled={!targetingInput.trim()}
-                  className="px-4 py-2 rounded-lg font-medium text-sm transition-colors bg-white border hover:bg-gray-50 disabled:opacity-50"
-                  style={{ borderColor: '#e5e7eb', color: '#1a1512' }}
+                  className="px-3 py-2 rounded-lg text-xs font-medium transition-all accent-gold text-white hover:opacity-90"
                 >
                   Add
                 </button>
               </div>
 
-              {formData.targetingRules.allowedUsers.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {formData.targetingRules.allowedUsers.map(user => (
-                    <span 
-                      key={user} 
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-white border"
-                      style={{ borderColor: '#d4c5b0', color: '#1a1512' }}
+              {formData.targetingRules.allowedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {formData.targetingRules.allowedUsers.map((user) => (
+                    <div
+                      key={user}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-[#f59e0b] text-xs"
                     >
-                      {user}
-                      <button onClick={() => removeTargetUser(user)} className="hover:text-red-500">
-                        <X className="w-3 h-3" />
+                      <span>{user}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTargetUser(user)}
+                        className="hover:text-white transition-colors"
+                      >
+                        <X className="w-3 h-3" strokeWidth={2} />
                       </button>
-                    </span>
+                    </div>
                   ))}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-sm italic opacity-50 flex items-center justify-center gap-2">
-                  <Info className="w-4 h-4" /> No specific users targeted
                 </div>
               )}
             </div>
           </section>
 
-          {/* Footer Actions */}
+          {/* Error Display */}
           {error && (
-            <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" /> {error}
+            <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 text-red-400" strokeWidth={2} />
+              <p className="text-xs text-red-300">{error}</p>
             </div>
           )}
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t sticky bottom-0 bg-white" style={{ borderColor: '#e5e7eb' }}>
+          {/* Submit Button */}
+          <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl font-medium border transition-colors hover:bg-gray-50"
-              style={{ borderColor: '#e5e7eb', color: '#736a62' }}
+              className="flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all text-gray-400 hover:text-white hover:bg-white/5"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 rounded-xl font-medium text-white shadow-sm hover:shadow-md transition-all flex items-center gap-2"
-              style={{ backgroundColor: '#a67c52' }}
+              className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                loading
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'accent-gold text-white hover:opacity-90'
+              }`}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {loading ? 'Saving...' : (initialData ? 'Save Changes' : 'Create Flag')}
+              {loading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" strokeWidth={2} />
+                  {initialData ? 'Updating...' : 'Creating...'}
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" strokeWidth={2} />
+                  {initialData ? 'Update Flag' : 'Create Flag'}
+                </>
+              )}
             </button>
           </div>
         </form>

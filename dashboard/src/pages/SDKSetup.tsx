@@ -1,24 +1,22 @@
 import { useState, useEffect } from 'react';
-import { Terminal, Key, Copy, CheckCircle, Code2, RotateCw, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Code, Copy, Check, Terminal, FileCode, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import ProtectedPage from '../components/ProtectedPage';
 import { ProjectAPI } from '../services/api';
-
-type Framework = 'react' | 'nodejs' | 'javascript';
 
 interface Project {
   id: string;
   name: string;
   apiKey: string;
-  createdAt: string;
 }
 
 export default function SDKSetup() {
-  const [activeTab, setActiveTab] = useState<Framework>('react');
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const [apiKeyCopied, setApiKeyCopied] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [selectedSDK, setSelectedSDK] = useState('javascript');
+  const [copiedApiKey, setCopiedApiKey] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -26,105 +24,119 @@ export default function SDKSetup() {
 
   const fetchProjects = async () => {
     try {
-      setLoading(true);
       const data = await ProjectAPI.getProjects();
       setProjects(data);
       if (data.length > 0) {
-        setSelectedProject(data[0]);
+        setSelectedProjectId(data[0].id);
       }
     } catch (err) {
-      console.error('Error fetching projects:', err);
+      console.error('Failed to fetch projects', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setApiKeyCopied(true);
-    setTimeout(() => setApiKeyCopied(false), 2000);
-  };
+  const selectedProject = projects.find(p => p.id === selectedProjectId);
+  const apiKey = selectedProject?.apiKey || 'No project selected';
 
-  const maskKey = (key: string) => {
-    const prefix = key.substring(0, 10);
-    return `${prefix}••••••••••••`;
-  };
+  const sdks = [
+    { id: 'javascript', name: 'JavaScript', icon: '📦' },
+    { id: 'react', name: 'React', icon: '⚛️' },
+    { id: 'node', name: 'Node.js', icon: '🟢' },
+    { id: 'python', name: 'Python', icon: '🐍' },
+  ];
 
-  const getCodeSnippets = (apiKey: string) => ({
+  const codeExamples: Record<string, {install: string; usage: string}> = {
+    javascript: {
+      install: 'npm install @flagforge/client',
+      usage: `import { FlagForge } from '@flagforge/client';
+
+const client = new FlagForge({
+  apiKey: '${apiKey}',
+  environment: 'production'
+});
+
+// Evaluate a flag
+const isEnabled = await client.isEnabled('new-feature');
+
+if (isEnabled) {
+  console.log('Feature is ON');
+}`
+    },
     react: {
-      install: 'npm install @flagforge/react-sdk',
-      setup: `import { FlagForgeProvider } from '@flagforge/react-sdk';
+      install: 'npm install @flagforge/react',
+      usage: `import { FlagForgeProvider, useFlag } from '@flagforge/react';
 
 function App() {
   return (
     <FlagForgeProvider apiKey="${apiKey}">
-      <YourApp />
+      <MyComponent />
     </FlagForgeProvider>
   );
-}`,
-      usage: `import { useFlag } from '@flagforge/react-sdk';
+}
 
-function Feature() {
-  const { isEnabled, loading } = useFlag('new-feature');
-  
-  if (loading) return <div>Loading...</div>;
+function MyComponent() {
+  const { isEnabled } = useFlag('new-feature');
   
   return (
     <div>
-      {isEnabled ? <NewFeature /> : <OldFeature />}
+      {isEnabled && <NewFeature />}
     </div>
   );
 }`
     },
-    nodejs: {
-      install: 'npm install @flagforge/node-sdk',
-      setup: `const { FlagForge } = require('@flagforge/node-sdk');
+    node: {
+      install: 'npm install @flagforge/node',
+      usage: `const { FlagForge } = require('@flagforge/node');
 
 const client = new FlagForge({
-  apiKey: '${apiKey}'
+  apiKey: '${apiKey}',
+  environment: 'production'
 });
 
-await client.initialize();`,
-      usage: `// Check if feature is enabled for a user
-const isEnabled = await client.isEnabled(
-  'new-feature',
-  { userId: 'user-123' }
-);
-
-if (isEnabled) {
-  // Execute new feature code
-} else {
-  // Execute old feature code
-}`
-    },
-    javascript: {
-      install: 'npm install @flagforge/js-sdk',
-      setup: `import FlagForge from '@flagforge/js-sdk';
-
-const client = new FlagForge({
-  apiKey: '${apiKey}'
-});
-
-client.initialize();`,
-      usage: `// Evaluate a feature flag
-const isEnabled = client.evaluate('new-feature', {
-  userId: 'user-123',
-  context: {
-    email: 'user@example.com'
-  }
-});
-
-if (isEnabled) {
-  document.getElementById('new-feature').style.display = 'block';
-}`
-    }
+app.get('/api/data', async (req, res) => {
+  const showBeta = await client.isEnabled('beta-features');
+  
+  res.json({ 
+    data: 'value',
+    beta: showBeta 
   });
+});`
+    },
+    python: {
+      install: 'pip install flagforge',
+      usage: `from flagforge import Client
+
+client = Client(
+    api_key="${apiKey}",
+    environment="production"
+)
+
+# Evaluate a flag
+is_enabled = client.is_enabled("new-feature")
+
+if is_enabled:
+    print("Feature is ON")`
+    }
+  };
+
+  const handleCopyApiKey = () => {
+    navigator.clipboard.writeText(apiKey);
+    setCopiedApiKey(true);
+    setTimeout(() => setCopiedApiKey(false), 2000);
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
 
   if (loading) {
     return (
       <ProtectedPage>
-        <div className="p-10 flex items-center justify-center" style={{ backgroundColor: '#f5f5f0', minHeight: '100vh' }}>
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#a67c52' }} />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-4 h-4 animate-spin text-[#f59e0b]" strokeWidth={2} />
         </div>
       </ProtectedPage>
     );
@@ -133,279 +145,178 @@ if (isEnabled) {
   if (projects.length === 0) {
     return (
       <ProtectedPage>
-        <div className="p-10 flex items-center justify-center" style={{ backgroundColor: '#f5f5f0', minHeight: '100vh' }}>
-          <div className="text-center max-w-md">
-            <div 
-              className="w-20 h-20 rounded-2xl mx-auto mb-6 flex items-center justify-center"
-              style={{ backgroundColor: '#f0ebe3' }}
-            >
-              <Key className="w-10 h-10" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-            </div>
-            <h2 className="text-2xl font-semibold mb-3" style={{ color: '#1a1512' }}>
-              No Projects Yet
-            </h2>
-            <p className="mb-6" style={{ color: '#736a62' }}>
-              Create a project first to get your API key and start integrating FlagForge
-            </p>
-            <button
-              className="px-6 py-3 rounded-xl font-semibold transition-all"
-              style={{
-                backgroundColor: '#a67c52',
-                color: '#ffffff'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#956b47';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#a67c52';
-              }}
-              onClick={() => window.location.href = '/'}
-            >
-              Go to Dashboard
-            </button>
-          </div>
+        <div className="text-center py-20">
+          <h2 className="text-lg font-semibold text-white mb-2">No Projects Found</h2>
+          <p className="text-xs text-gray-500">Create a project first to get your API key</p>
         </div>
       </ProtectedPage>
     );
   }
 
-  const codeSnippets = selectedProject ? getCodeSnippets(selectedProject.apiKey) : getCodeSnippets('');
-
   return (
     <ProtectedPage>
-      <div className="p-10" style={{ backgroundColor: '#f5f5f0', minHeight: '100vh' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="space-y-6 max-w-4xl"
+      >
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold mb-2" style={{ color: '#1a1512', letterSpacing: '-0.02em' }}>
-                SDK Setup
-              </h1>
-              <p className="text-sm" style={{ color: '#736a62' }}>
-                Integrate FlagForge into your application
-              </p>
-            </div>
-            
-            {/* Connection Status Badge */}
-            <div 
-              className="px-4 py-2 rounded-xl flex items-center gap-2"
-              style={{
-                backgroundColor: '#f0ebe3',
-                border: '1px solid #d4c5b0'
-              }}
-            >
-              <CheckCircle className="w-4 h-4" style={{ color: '#8b7355' }} strokeWidth={1.5} />
-              <span className="text-sm font-medium" style={{ color: '#8b7355' }}>
-                Ready for Integration
-              </span>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">SDK Setup</h1>
+            <p className="text-xs text-gray-500">Integrate FlagForge into your application</p>
           </div>
-
+          
           {/* Project Selector */}
-          {projects.length > 1 && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
-                Select Project
-              </label>
-              <select
-                value={selectedProject?.id || ''}
-                onChange={(e) => {
-                  const project = projects.find(p => p.id === e.target.value);
-                  setSelectedProject(project || null);
-                }}
-                className="px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2"
-                style={{
-                  backgroundColor: '#ffffff',
-                  borderColor: '#e5e7eb',
-                  color: '#1a1512',
-                  minWidth: '300px'
-                }}
-              >
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-4 py-2 rounded-lg bento-surface text-sm text-white focus:outline-none focus:border-white/10"
+          >
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* API Key Section */}
-        {selectedProject && (
-          <div className="mb-8">
-            <div 
-              className="rounded-2xl p-8"
-              style={{
-                backgroundColor: '#ffffff',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <Key className="w-6 h-6" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-                <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-                  Your API Key
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
-                    {selectedProject.name}
-                  </label>
-                  <div className="flex gap-3">
-                    <div 
-                      className="flex-1 px-4 py-3 rounded-xl border font-mono text-sm flex items-center gap-3"
-                      style={{
-                        backgroundColor: '#f5f5f0',
-                        borderColor: '#e5e7eb',
-                        color: '#736a62'
-                      }}
-                    >
-                      <span className="flex-1">
-                        {showApiKey ? selectedProject.apiKey : maskKey(selectedProject.apiKey)}
-                      </span>
-                      <button
-                        onClick={() => setShowApiKey(!showApiKey)}
-                        className="p-1 rounded-lg transition-colors"
-                        style={{ color: '#736a62' }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#e5e7eb';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
-                      >
-                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <button
-                      onClick={() => copyToClipboard(selectedProject.apiKey)}
-                      className="px-4 py-3 rounded-xl font-medium transition-all flex items-center gap-2"
-                      style={{
-                        backgroundColor: apiKeyCopied ? '#22c55e' : '#a67c52',
-                        color: '#ffffff'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!apiKeyCopied) {
-                          e.currentTarget.style.backgroundColor = '#956b47';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!apiKeyCopied) {
-                          e.currentTarget.style.backgroundColor = '#a67c52';
-                        }
-                      }}
-                    >
-                      {apiKeyCopied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {apiKeyCopied ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <div className="bento-surface inner-glow rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Terminal className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+            <h2 className="text-sm font-medium text-white">API Key</h2>
           </div>
-        )}
-
-        {/* Installation Guide */}
-        <div className="mb-8">
-          <div 
-            className="rounded-2xl p-8"
-            style={{
-              backgroundColor: '#ffffff',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-            }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <Terminal className="w-6 h-6" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-              <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-                Installation
-              </h2>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3 py-2 rounded-lg bg-[#0a0a0a] border border-white/5 font-mono text-xs text-gray-400">
+              {apiKey}
             </div>
-
-            <div 
-              className="rounded-xl p-4 font-mono text-sm"
-              style={{
-                backgroundColor: '#2c2420',
-                color: '#f5f5f0'
-              }}
+            <button
+              onClick={handleCopyApiKey}
+              className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-gray-300 transition-colors"
             >
-              {codeSnippets[activeTab].install}
+              {copiedApiKey ? <Check className="w-4 h-4 text-emerald-400" strokeWidth={2} /> : <Copy className="w-4 h-4" strokeWidth={2} />}
+            </button>
+          </div>
+          
+          <p className="text-xs text-gray-600 mt-2">
+            Keep your API key secure. Never commit it to version control.
+          </p>
+        </div>
+
+        {/* SDK Selector */}
+        <div className="flex gap-2">
+          {sdks.map((sdk) => (
+            <button
+              key={sdk.id}
+              onClick={() => setSelectedSDK(sdk.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                selectedSDK === sdk.id 
+                  ? 'bento-surface text-white' 
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.02]'
+              }`}
+            >
+              <span className="mr-2">{sdk.icon}</span>
+              {sdk.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Installation */}
+        <div className="bento-surface inner-glow rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileCode className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+              <span className="text-sm font-medium text-white">Installation</span>
+            </div>
+            <button
+              onClick={() => handleCopyCode(codeExamples[selectedSDK].install)}
+              className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-gray-300 transition-colors"
+            >
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} /> : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
+            </button>
+          </div>
+          
+          {/* IDE-style code block */}
+          <div className="relative bg-[#0a0a0a]">
+            <div className="flex items-center gap-2 px-5 py-2 border-b border-white/5">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/50" />
+              </div>
+              <span className="text-xs text-gray-600 font-mono">terminal</span>
+            </div>
+            <div className="p-5 font-mono text-sm">
+              <div className="flex items-start gap-3">
+                <span className="text-gray-600 select-none">$</span>
+                <code className="text-emerald-400">{codeExamples[selectedSDK].install}</code>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Implementation Steps */}
-        <div>
-          <div 
-            className="rounded-2xl p-8"
-            style={{
-              backgroundColor: '#ffffff',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
-            }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <Code2 className="w-6 h-6" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-              <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-                Implementation
-              </h2>
+        {/* Usage Example */}
+        <div className="bento-surface inner-glow rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Code className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+              <span className="text-sm font-medium text-white">Usage Example</span>
             </div>
-
-            {/* Framework Tabs */}
-            <div className="flex gap-2 mb-6 border-b" style={{ borderColor: '#e5e7eb' }}>
-              {(['react', 'nodejs', 'javascript'] as Framework[]).map((framework) => (
-                <button
-                  key={framework}
-                  onClick={() => setActiveTab(framework)}
-                  className="px-4 py-2 font-medium transition-all"
-                  style={{
-                    color: activeTab === framework ? '#a67c52' : '#736a62',
-                    borderBottom: activeTab === framework ? '2px solid #a67c52' : '2px solid transparent',
-                    marginBottom: '-1px'
-                  }}
-                >
-                  {framework === 'react' ? 'React' : framework === 'nodejs' ? 'Node.js' : 'JavaScript'}
-                </button>
-              ))}
-            </div>
-
-            {/* Code Examples */}
-            <div className="space-y-6">
-              {/* Setup */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#1a1512' }}>
-                  1. Initialize the SDK
-                </h3>
-                <div 
-                  className="rounded-xl p-4 font-mono text-sm whitespace-pre-wrap"
-                  style={{
-                    backgroundColor: '#2c2420',
-                    color: '#f5f5f0'
-                  }}
-                >
-                  {codeSnippets[activeTab].setup}
-                </div>
+            <button
+              onClick={() => handleCopyCode(codeExamples[selectedSDK].usage)}
+              className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-gray-300 transition-colors"
+            >
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" strokeWidth={2} /> : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
+            </button>
+          </div>
+          
+          {/* IDE-style code block with line numbers */}
+          <div className="relative bg-[#0a0a0a]">
+            <div className="flex items-center gap-2 px-5 py-2 border-b border-white/5">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/50" />
               </div>
-
-              {/* Usage */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3" style={{ color: '#1a1512' }}>
-                  2. Use Feature Flags
-                </h3>
-                <div 
-                  className="rounded-xl p-4 font-mono text-sm whitespace-pre-wrap"
-                  style={{
-                    backgroundColor: '#2c2420',
-                    color: '#f5f5f0'
-                  }}
-                >
-                  {codeSnippets[activeTab].usage}
-                </div>
+              <span className="text-xs text-gray-600 font-mono">index.{selectedSDK === 'python' ? 'py' : 'js'}</span>
+            </div>
+            <div className="flex">
+              {/* Line Numbers */}
+              <div className="px-4 py-5 border-r border-white/5 text-gray-600 font-mono text-xs select-none">
+                {codeExamples[selectedSDK].usage.split('\n').map((_, i) => (
+                  <div key={i} className="leading-6 text-right">{i + 1}</div>
+                ))}
+              </div>
+              
+              {/* Code */}
+              <div className="flex-1 p-5">
+                <pre className="font-mono text-xs leading-6">
+                  <code className="text-gray-300">
+                    {codeExamples[selectedSDK].usage.split('\n').map((line, i) => (
+                      <div key={i}>
+                        {line.includes('import') || line.includes('from') || line.includes('require') ? (
+                          <span className="text-purple-400">{line}</span>
+                        ) : line.includes('const') || line.includes('function') || line.includes('async') || line.includes('await') || line.includes('def') ? (
+                          <span className="text-blue-400">{line}</span>
+                        ) : line.includes('//') || line.includes('#') ? (
+                          <span className="text-gray-600">{line}</span>
+                        ) : line.includes('apiKey') || line.includes('api_key') ? (
+                          <span className="text-amber-400">{line}</span>
+                        ) : (
+                          <span>{line}</span>
+                        )}
+                      </div>
+                    ))}
+                  </code>
+                </pre>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </ProtectedPage>
   );
 }

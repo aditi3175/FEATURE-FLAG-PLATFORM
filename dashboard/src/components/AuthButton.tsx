@@ -43,30 +43,17 @@ export default function AuthButton() {
   if (isAuthenticated && user) {
     return (
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ backgroundColor: '#f5f5f0' }}>
-          <User className="w-4 h-4" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-          <span className="text-sm font-medium" style={{ color: '#1a1512' }}>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/50 border border-slate-700">
+          <User className="w-4 h-4 text-purple-400" strokeWidth={2} />
+          <span className="text-sm font-medium text-white">
             {user.name}
           </span>
         </div>
         <button
           onClick={logout}
-          className="px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border"
-          style={{
-            backgroundColor: '#ffffff',
-            borderColor: '#e5e7eb',
-            color: '#736a62'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = '#a67c52';
-            e.currentTarget.style.color = '#a67c52';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#e5e7eb';
-            e.currentTarget.style.color = '#736a62';
-          }}
+          className="px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 border border-slate-600 bg-slate-700/50 text-slate-300 hover:bg-slate-600 hover:border-purple-500/50 hover:text-white"
         >
-          <LogOut className="w-4 h-4" strokeWidth={1.5} />
+          <LogOut className="w-4 h-4" strokeWidth={2} />
           Logout
         </button>
       </div>
@@ -80,50 +67,28 @@ export default function AuthButton() {
           setAuthMode('login');
           setShowAuthModal(true);
         }}
-        className="px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2"
-        style={{
-          backgroundColor: '#a67c52',
-          color: '#ffffff'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#956b47';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#a67c52';
-        }}
+        className="px-4 py-2 rounded-xl font-medium transition-all flex items-center gap-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105"
       >
-        <LogIn className="w-4 h-4" strokeWidth={1.5} />
+        <LogIn className="w-4 h-4" strokeWidth={2} />
         Login
       </button>
 
       {/* Auth Modal (Login/Signup) */}
       {showAuthModal && (
-        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}>
-          <div
-            className="rounded-2xl p-8 max-w-md w-full mx-4 relative"
-            style={{
-              backgroundColor: '#ffffff'
-            }}
-          >
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/70 backdrop-blur-sm">
+          <div className="rounded-2xl p-8 max-w-md w-full mx-4 relative border border-slate-700/50 bg-slate-800/90 backdrop-blur-xl">
             <button
               onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-lg transition-all"
-              style={{ color: '#736a62' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f5f5f0';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
+              className="absolute top-4 right-4 p-2 rounded-lg transition-all text-slate-400 hover:bg-slate-700 hover:text-white"
             >
-              <X className="w-5 h-5" strokeWidth={1.5} />
+              <X className="w-5 h-5" strokeWidth={2} />
             </button>
 
             <div className="mb-6">
-              <h2 className="text-2xl font-semibold mb-2" style={{ color: '#1a1512' }}>
+              <h2 className="text-2xl font-semibold mb-2 text-white">
                 {authMode === 'login' ? 'Welcome Back' : 'Create Account'}
               </h2>
-              <p className="text-sm" style={{ color: '#736a62' }}>
+              <p className="text-sm text-slate-400">
                 {authMode === 'login' 
                   ? 'Sign in to your FlagForge account' 
                   : 'Get started with FlagForge'}
@@ -134,7 +99,7 @@ export default function AuthButton() {
               {/* Name field - only for signup */}
               {authMode === 'signup' && (
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
+                  <label className="block text-sm font-medium mb-2 text-white">
                     Full Name
                   </label>
                   <input
@@ -143,26 +108,14 @@ export default function AuthButton() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="John Doe"
                     required
-                    className="w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2"
-                    style={{
-                      borderColor: '#e5e7eb',
-                      color: '#1a1512'
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#a67c52';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(166, 124, 82, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#e5e7eb';
-                      e.target.style.boxShadow = 'none';
-                    }}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
                 </div>
               )}
 
               {/* Email field */}
               <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
+                <label className="block text-sm font-medium mb-2 text-white">
                   Email Address
                 </label>
                 <input
@@ -171,25 +124,13 @@ export default function AuthButton() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2"
-                  style={{
-                    borderColor: '#e5e7eb',
-                    color: '#1a1512'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#a67c52';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(166, 124, 82, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#e5e7eb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 />
               </div>
 
               {/* Password field */}
               <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
+                <label className="block text-sm font-medium mb-2 text-white">
                   Password
                 </label>
                 <input
@@ -198,33 +139,15 @@ export default function AuthButton() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full px-4 py-3 rounded-xl border transition-all focus:outline-none focus:ring-2"
-                  style={{
-                    borderColor: '#e5e7eb',
-                    color: '#1a1512'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#a67c52';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(166, 124, 82, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#e5e7eb';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 />
               </div>
 
               {/* Error Alert */}
               {localError && (
-                <div 
-                  className="p-4 rounded-xl border flex items-start gap-3"
-                  style={{
-                    backgroundColor: '#fef2f2',
-                    borderColor: '#fca5a5'
-                  }}
-                >
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#b91c1c' }} strokeWidth={1.5} />
-                  <p className="text-sm" style={{ color: '#991b1b' }}>
+                <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/10 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" strokeWidth={2} />
+                  <p className="text-sm text-red-300">
                     {localError}
                   </p>
                 </div>
@@ -234,32 +157,20 @@ export default function AuthButton() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: isSubmitting ? '#d4af8e' : '#a67c52',
-                  color: '#ffffff',
-                  opacity: isSubmitting ? 0.7 : 1,
-                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSubmitting) {
-                    e.currentTarget.style.backgroundColor = '#956b47';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSubmitting) {
-                    e.currentTarget.style.backgroundColor = '#a67c52';
-                  }
-                }}
+                className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
+                  isSubmitting
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105'
+                }`}
               >
                 {authMode === 'login' ? (
                   <>
-                    <LogIn className="w-4 h-4" strokeWidth={1.5} />
+                    <LogIn className="w-4 h-4" strokeWidth={2} />
                     {isSubmitting ? 'Signing In...' : 'Sign In'}
                   </>
                 ) : (
                   <>
-                    <UserPlus className="w-4 h-4" strokeWidth={1.5} />
+                    <UserPlus className="w-4 h-4" strokeWidth={2} />
                     {isSubmitting ? 'Creating Account...' : 'Create Account'}
                   </>
                 )}
@@ -268,20 +179,13 @@ export default function AuthButton() {
 
             {/* Toggle between login and signup */}
             <div className="mt-6 text-center">
-              <p className="text-sm" style={{ color: '#736a62' }}>
+              <p className="text-sm text-slate-400">
                 {authMode === 'login' ? "Don't have an account?" : 'Already have an account?'}
                 {' '}
                 <button
                   type="button"
                   onClick={toggleAuthMode}
-                  className="font-semibold transition-colors"
-                  style={{ color: '#a67c52' }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = '#956b47';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#a67c52';
-                  }}
+                  className="font-semibold text-purple-400 hover:text-purple-300 transition-colors"
                 >
                   {authMode === 'login' ? 'Sign up' : 'Sign in'}
                 </button>

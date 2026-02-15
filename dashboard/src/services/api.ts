@@ -238,3 +238,24 @@ export const FlagAPI = {
     }
   },
 };
+
+// Analytics API
+export const AnalyticsAPI = {
+  async getStats(): Promise<any> {
+    // Check if user is logged in before fetching
+    const token = TokenService.getToken();
+    if (!token) return { totalEvaluations: 0, recentEvaluations: 0, evaluationsByEnvironment: {}, avgResponseTime: null };
+
+    const response = await fetch(`${API_BASE_URL}/api/analytics/stats`, {
+      headers: { ...TokenService.getAuthHeader() },
+    });
+
+    if (!response.ok) {
+      // If endpoint doesn't exist yet or fails, return empty stats
+      console.warn('Analytics endpoint failed, using default stats');
+      return { totalEvaluations: 0, recentEvaluations: 0, evaluationsByEnvironment: {}, avgResponseTime: null };
+    }
+
+    return response.json();
+  },
+};

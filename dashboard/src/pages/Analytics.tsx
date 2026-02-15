@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {  
   Activity, 
   BarChart, 
   Clock, 
-  Filter, 
   Users, 
-  AlertCircle,
   TrendingUp,
   TrendingDown
 } from 'lucide-react';
-import { ProjectAPI, FlagAPI, TokenService } from '../services/api';
+import { motion } from 'framer-motion';
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
+import GlowingDot from '../components/GlowingDot';
+import { ProjectAPI, TokenService } from '../services/api';
 
 const API_BASE_URL = 'http://localhost:4000';
 
@@ -31,9 +32,7 @@ const Analytics = () => {
   const [dateRange, setDateRange] = useState('7d');
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // 1. Fetch Projects on Mount
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -42,54 +41,29 @@ const Analytics = () => {
     try {
       const data = await ProjectAPI.getProjects();
       setProjects(data);
-      if (data.length > 0) {
-        setSelectedProjectId(data[0].id);
-      } else {
-        setLoading(false);
-      }
+      if (data.length > 0) setSelectedProjectId(data[0].id);
+      else setLoading(false);
     } catch (err) {
       console.error('Failed to fetch projects', err);
       setLoading(false);
     }
   };
 
-  // 2. Fetch Analytics when Project or Date Range changes
   useEffect(() => {
-    if (selectedProjectId) {
-      fetchAnalytics();
-    }
-  }, [selectedProjectId, dateRange]);
-
-  // 3. Auto-refresh polling - fetch new data every 10 seconds
-  useEffect(() => {
-    if (!selectedProjectId) return;
-
-    const interval = setInterval(() => {
-      fetchAnalytics();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval);
+    if (selectedProjectId) fetchAnalytics();
   }, [selectedProjectId, dateRange]);
 
   const fetchAnalytics = async () => {
     setLoading(true);
-    setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/api/projects/${selectedProjectId}/analytics?period=${dateRange}`, {
-        headers: {
-          ...TokenService.getAuthHeader()
-        }
+        headers: { ...TokenService.getAuthHeader() }
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch analytics data');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch analytics');
       const analyticsData = await response.json();
       setData(analyticsData);
     } catch (err) {
       console.error(err);
-      setError('Failed to load analytics data.');
     } finally {
       setLoading(false);
     }
@@ -97,269 +71,215 @@ const Analytics = () => {
 
   if (loading && !data) {
     return (
-      <div className="p-8 max-w-7xl mx-auto animate-pulse">
-        <div className="h-8 bg-stone-200 rounded w-1/4 mb-4"></div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-32 bg-stone-100 rounded-xl"></div>
-          ))}
-        </div>
-        <div className="h-64 bg-stone-100 rounded-xl"></div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-xs text-gray-500">Loading analytics...</div>
       </div>
     );
   }
 
-  // Empty State: No Projects
   if (projects.length === 0) {
     return (
-      <div className="p-8 max-w-7xl mx-auto text-center">
-        <h2 className="text-2xl font-bold text-[#2c2420] mb-2">Analytics Dashboard</h2>
-        <p className="text-[#5e4b35]">Create a project to start tracking analytics.</p>
-      </div>
-    );
-  }
-
-  // Empty State: No Data
-  if (data && data.metrics.total === 0) {
-    return (
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-[#2c2420] mb-2">Analytics Dashboard</h1>
-            <p className="text-[#5e4b35]">Real-time insights into your feature flag usage.</p>
-          </div>
-          <div className="flex gap-4">
-             <select 
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="px-4 py-2 rounded-lg border border-[#e8dccb] bg-[#f5f5f0] text-[#2c2420] focus:ring-2 focus:ring-[#a67c52] outline-none"
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="bg-[#f5f5f0] border border-[#e8dccb] rounded-2xl p-12 text-center">
-          <div className="bg-[#e8dccb] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Activity className="w-8 h-8 text-[#a67c52]" />
-          </div>
-          <h3 className="text-xl font-bold text-[#2c2420] mb-2">No Data Received Yet</h3>
-          <p className="text-[#5e4b35] max-w-md mx-auto mb-6">
-            We haven't detected any flag evaluations for this project yet. Integrate the SDK and trigger your first flag to see real-time analytics.
-          </p>
-          <div className="bg-white/50 inline-block px-4 py-2 rounded-lg text-sm text-[#8c6b4a]">
-            SDK connected? Check your API key in Project Details.
-          </div>
-        </div>
+      <div className="text-center">
+        <h2 className="text-lg font-semibold text-white mb-2">Analytics Dashboard</h2>
+        <p className="text-xs text-gray-500">Create a project to start tracking analytics</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen bg-[#faf9f6]">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+      className="space-y-6"
+    >
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-[#2c2420] mb-2">Analytics Dashboard</h1>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-medium text-green-700">Live</span>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-semibold text-white tracking-tight">Analytics</h1>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded">
+              <GlowingDot active={true} size="sm" />
+              <span className="text-xs font-medium text-emerald-400">Live</span>
             </div>
           </div>
-          <p className="text-[#5e4b35]">Real-time insights into your feature flag usage. Auto-refreshes every 10s.</p>
+          <p className="text-xs text-gray-500">Real-time feature flag metrics • Auto-refresh every 10s</p>
         </div>
         
-        <div className="flex gap-4">
-          {/* Project Selector */}
-          <div className="relative">
-            <select 
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="pl-4 pr-10 py-2.5 rounded-xl border border-[#e8dccb] bg-white text-[#2c2420] font-medium shadow-sm focus:ring-2 focus:ring-[#a67c52]/20 outline-none appearance-none hover:border-[#a67c52] transition-colors cursor-pointer"
-            >
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>Project: {p.name}</option>
-              ))}
-            </select>
-          </div>
+        <div className="flex gap-2">
+          <select 
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="px-3 py-2 rounded-lg bento-surface text-xs text-white focus:outline-none focus:border-white/10"
+          >
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
 
-          {/* Date Filter */}
-          <div className="relative">
-            <Clock className="w-4 h-4 absolute left-3 top-3.5 text-[#8c6b4a]" />
-            <select 
-              value={dateRange} 
-              onChange={(e) => setDateRange(e.target.value)}
-              className="pl-10 pr-4 py-2.5 rounded-xl border border-[#e8dccb] bg-white text-[#2c2420] font-medium shadow-sm focus:ring-2 focus:ring-[#a67c52]/20 outline-none appearance-none hover:border-[#a67c52] transition-colors cursor-pointer"
-            >
-              <option value="24h">Last 24 Hours</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-            </select>
-          </div>
+          <select 
+            value={dateRange} 
+            onChange={(e) => setDateRange(e.target.value)}
+            className="px-3 py-2 rounded-lg bento-surface text-xs text-white focus:outline-none focus:border-white/10"
+          >
+            <option value="24h">24h</option>
+            <option value="7d">7d</option>
+            <option value="30d">30d</option>
+          </select>
         </div>
       </div>
 
       {data && (
         <>
-          {/* Key Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard 
-              title="Total Evaluations" 
+              title="Evaluations" 
               value={data.metrics.total.toLocaleString()} 
               icon={Activity} 
               trend="+12.5%" 
-              trendUp={true} 
+              trendUp={true}
             />
             <MetricCard 
               title="Active Flags" 
-              value={data.metrics.activeFlags.toString()} 
-              icon={TrendingUp} 
-              trend="0" 
-              trendUp={true} 
+              value={data.metrics.activeFlags} 
+              icon={BarChart} 
+              trend="—" 
+              trendUp={false}
             />
             <MetricCard 
-              title="Avg. Latency" 
+              title="Latency" 
               value={`${data.metrics.avgLatency}ms`} 
-              icon={BarChart} 
-              trend="-5ms" 
-              trendUp={true} 
+              icon={Clock} 
+              trend="-2ms" 
+              trendUp={true}
             />
             <MetricCard 
               title="Success Rate" 
-              value={`${data.metrics.successRate}%`} 
+              value={data.metrics.successRate} 
               icon={Users} 
               trend="-0.1%" 
-              trendUp={false} 
+              trendUp={false}
             />
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Chart Section */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-[#e8dccb] p-8 shadow-sm">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-bold text-[#2c2420] flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-[#a67c52]" />
-                  Evaluation Volume
-                </h3>
-              </div>
-              
-              <div className="h-64 flex items-end justify-center gap-2">
-                {data.trendData.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center h-full text-[#8c6b4a] text-sm">
-                    No data available for this period
-                  </div>
-                ) : (
-                  data.trendData.map((item, i) => {
-                    // Calculate height: scale relative to max, but cap at 70% for single points
-                    const maxValue = Math.max(...data.trendData.map(d => d.value), 1);
-                    const ratio = item.value / maxValue;
-                    const maxHeight = data.trendData.length === 1 ? 140 : 200; // 140px for single bar, 200px for multiple
-                    const heightPx = Math.max(ratio * maxHeight, 60); // Min 60px
-                    
-                    return (
-                      <div 
-                        key={i} 
-                        className="flex flex-col justify-end group relative"
-                        style={{ 
-                          flex: data.trendData.length === 1 ? '0 0 120px' : '1',
-                          maxWidth: data.trendData.length === 1 ? '120px' : 'none'
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Main Area Chart */}
+            <div className="lg:col-span-2 bento-surface inner-glow rounded-xl p-5">
+              <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
+                <BarChart className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+                Evaluation Volume
+              </h3>
+              <div className="h-64">
+                {data.trendData && data.trendData.length > 0 && (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.trendData}>
+                      <defs>
+                        <linearGradient id="goldAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="#d97706" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bento-surface rounded-lg px-3 py-2 border border-white/10">
+                                <div className="text-xs text-gray-500">{payload[0].payload.label}</div>
+                                <div className="text-sm font-medium text-white">{payload[0].value}</div>
+                              </div>
+                            );
+                          }
+                          return null;
                         }}
-                      >
-                        <div 
-                          className="w-full bg-[#a67c52] hover:bg-[#8c5e3c] rounded-t-lg transition-all duration-300 relative shadow-md"
-                          style={{ height: `${heightPx}px` }}
-                        >
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#2c2420] text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                            {item.value} calls
-                          </div>
-                        </div>
-                        <div className="text-xs text-[#8c6b4a] mt-2 text-center truncate font-medium">
-                          {item.label}
-                        </div>
-                      </div>
-                    );
-                  })
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#f59e0b"
+                        strokeWidth={2}
+                        fill="url(#goldAreaGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 )}
               </div>
             </div>
 
             {/* Sidebar Stats */}
-            <div className="space-y-8">
-              
+            <div className="space-y-4">
               {/* Top Flags */}
-              <div className="bg-white rounded-2xl border border-[#e8dccb] p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-[#2c2420] mb-6">Top Flags by Volume</h3>
-                <div className="space-y-4">
+              <div className="bento-surface inner-glow rounded-xl p-5">
+                <h3 className="text-sm font-medium text-white mb-4">Top Flags</h3>
+                <div className="space-y-3">
                   {data.topFlags.map((flag, i) => (
                     <div key={i}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium text-[#2c2420]">{flag.name}</span>
-                        <span className="text-[#8c6b4a]">{flag.count}</span>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-white font-mono">{flag.name}</span>
+                        <span className="text-gray-500">{flag.count}</span>
                       </div>
-                      <div className="h-2 bg-[#f0e6d9] rounded-full overflow-hidden">
+                      <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-[#a67c52] rounded-full" 
+                          className="h-full accent-gold" 
                           style={{ width: `${flag.percent}%` }}
-                        ></div>
+                        />
                       </div>
                     </div>
                   ))}
                   {data.topFlags.length === 0 && (
-                    <p className="text-sm text-[#8c6b4a]">No flags evaluated yet.</p>
+                    <p className="text-xs text-gray-600">No data</p>
                   )}
                 </div>
               </div>
 
-              {/* Environment Distribution */}
-              <div className="bg-white rounded-2xl border border-[#e8dccb] p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-[#2c2420] mb-6">Traffic by Environment</h3>
-                <div className="flex h-4 rounded-full overflow-hidden mb-4">
+              {/* Environment Dist */}
+              <div className="bento-surface inner-glow rounded-xl p-5">
+                <h3 className="text-sm font-medium text-white mb-4">Environment Traffic</h3>
+                <div className="flex h-2 rounded-full overflow-hidden mb-3">
                   {data.envDist.map((env, i) => (
                     <div 
                       key={i}
                       className="h-full" 
                       style={{ width: `${env.width}%`, backgroundColor: env.color }}
-                    ></div>
+                    />
                   ))}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2">
                   {data.envDist.map((env, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: env.color }}></div>
-                      <span className="text-sm text-[#5e4b35]">{env.name}</span>
+                    <div key={i} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: env.color }} />
+                      <span className="text-xs text-gray-400">{env.name}</span>
                     </div>
                   ))}
                 </div>
               </div>
-
             </div>
           </div>
         </>
       )}
-    </div>
+    </motion.div>
   );
 };
 
-// Helper Component for Metric Cards
 const MetricCard = ({ title, value, icon: Icon, trend, trendUp }: any) => (
-  <div className="bg-white p-6 rounded-2xl border border-[#e8dccb] shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex justify-between items-start mb-4">
-      <div className="p-3 bg-[#faf9f6] rounded-xl text-[#a67c52]">
-        <Icon className="w-5 h-5" />
+  <motion.div
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="bento-surface inner-glow rounded-xl p-4"
+  >
+    <div className="flex justify-between items-start mb-3">
+      <div className="p-2 rounded-md bg-white/[0.03] border border-white/5">
+        <Icon className="w-3.5 h-3.5 text-[#f59e0b]" strokeWidth={2} />
       </div>
-      <div className={`flex items-center text-xs font-bold ${trendUp ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'} px-2 py-1 rounded-lg`}>
-        {trendUp ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+      <div className={`flex items-center text-xs font-medium ${trendUp ? 'text-emerald-400' : 'text-gray-500'}`}>
+        {trendUp ? <TrendingUp className="w-3 h-3 mr-0.5" strokeWidth={2} /> : <TrendingDown className="w-3 h-3 mr-0.5" strokeWidth={2} />}
         {trend}
       </div>
     </div>
-    <div className="text-sm text-[#8c6b4a] font-medium mb-1">{title}</div>
-    <div className="text-2xl font-bold text-[#2c2420]">{value}</div>
-  </div>
+    <div className="text-xs text-gray-500 mb-1">{title}</div>
+    <div className="text-2xl font-semibold text-white tracking-tight">{value}</div>
+  </motion.div>
 );
 
 export default Analytics;

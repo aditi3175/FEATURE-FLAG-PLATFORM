@@ -129,6 +129,7 @@ export const logSdkEvent = async (req: Request, res: Response): Promise<void> =>
         result: result ?? true,
         environment: environment || 'Production',
         userId: userId || 'anonymous',
+        latency: (req.body.latency as number) || 0,
         timestamp: new Date()
       }
     });

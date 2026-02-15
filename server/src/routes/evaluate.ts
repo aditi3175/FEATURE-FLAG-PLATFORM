@@ -45,6 +45,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Evaluate flag
+    const startTime = Date.now();
     const result = evaluateFlag(
       {
         key: flag.key,
@@ -54,6 +55,20 @@ router.post('/', async (req: Request, res: Response) => {
       },
       userId
     );
+    const latency = Date.now() - startTime;
+
+    // Log evaluation event asynchronously (don't block response)
+    prisma.evaluationEvent.create({
+      data: {
+        projectId: project.id,
+        flagKey: flag.key,
+        result: result.enabled,
+        environment: 'Production', // Default for legacy endpoint
+        userId: userId,
+        latency: latency,
+        timestamp: new Date()
+      }
+    }).catch(err => console.error('Failed to log evaluation event:', err));
 
     res.json(result);
   } catch (error) {

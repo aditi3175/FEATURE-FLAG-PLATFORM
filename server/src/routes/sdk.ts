@@ -117,6 +117,7 @@ router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Evaluate flag
+    const startTime = Date.now();
     const result = evaluateFlag(
       {
         key: flag.key,
@@ -126,6 +127,20 @@ router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
       },
       userId
     );
+    const latency = Date.now() - startTime;
+
+    // Log evaluation event asynchronously
+    prisma.evaluationEvent.create({
+      data: {
+        projectId: project.id,
+        flagKey: flag.key,
+        result: result.enabled,
+        environment: 'Production', // TODO: Get from request
+        userId: userId,
+        latency: latency,
+        timestamp: new Date()
+      }
+    }).catch(err => console.error('Failed to log SDK evaluation event:', err));
 
     res.json(result);
   } catch (error) {

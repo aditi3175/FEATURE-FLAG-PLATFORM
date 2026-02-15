@@ -1,292 +1,155 @@
 import { useState } from 'react';
-import { User, Key, Copy, RotateCw, Trash2, Check, Bell, Shield } from 'lucide-react';
+import { User, Key, Trash2, Shield, Bell } from 'lucide-react';
+import { motion } from 'framer-motion';
 import ProtectedPage from '../components/ProtectedPage';
 import { useAuth } from '../context/AuthContext';
-
 import { ProjectAPI } from '../services/api';
 
 export default function Settings() {
   const { user } = useAuth();
-  const [apiKey] = useState('fgk_live_9a7b8c6d5e4f3g2h1i0j');
-  const [copied, setCopied] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
 
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleRotateKey = () => {
-    alert('API Key rotation would happen here');
-  };
-
-  const handleDeleteProject = () => {
-    if (confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      alert('Project deletion would happen here');
-    }
-  };
-
   return (
     <ProtectedPage>
-      <div className="space-y-8 max-w-4xl">
-      {/* Header */}
-      <div>
-        <h1 
-          className="text-4xl font-semibold mb-2"
-          style={{ 
-            color: '#1a1512',
-            letterSpacing: '-0.02em'
-          }}
-        >
-          Settings
-        </h1>
-        <p style={{ color: '#736a62', letterSpacing: '0.02em' }}>
-          Manage your account and project configuration
-        </p>
-      </div>
-
-      {/* Account Section */}
-      <section
-        className="rounded-xl p-6 border"
-        style={{ 
-          backgroundColor: '#ffffff',
-          borderColor: '#f3f4f6'
-        }}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+        className="space-y-6 max-w-3xl"
       >
-        <div className="flex items-center gap-2 mb-6">
-          <User className="w-5 h-5" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-              Account
-            </h2>
-            <p className="text-sm" style={{ color: '#736a62' }}>
-              Your personal information
-            </p>
-          </div>
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Settings</h1>
+          <p className="text-xs text-gray-500">Manage your account and project configuration</p>
         </div>
 
-        <div className="space-y-4">
-          {/* Profile Name */}
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
-              Full Name
-            </label>
-            <input
-              type="text"
-              value={user?.name || ''}
-              readOnly
-              className="w-full px-4 py-3 rounded-xl border"
-              style={{
-                backgroundColor: '#f5f5f0',
-                borderColor: '#e5e7eb',
-                color: '#736a62',
-                cursor: 'not-allowed'
-              }}
-            />
+        {/* Account Section */}
+        <div className="bento-surface inner-glow rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <User className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+            <h2 className="text-sm font-medium text-white">Account</h2>
           </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium mb-2" style={{ color: '#1a1512' }}>
-              Email Address
-            </label>
-            <input
-              type="email"
-              value={user?.email || ''}
-              readOnly
-              className="w-full px-4 py-3 rounded-xl border"
-              style={{
-                backgroundColor: '#f5f5f0',
-                borderColor: '#e5e7eb',
-                color: '#736a62',
-                cursor: 'not-allowed'
-              }}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* Project Configuration */}
-      <section
-        className="rounded-xl p-6 border"
-        style={{ 
-          backgroundColor: '#ffffff',
-          borderColor: '#f3f4f6'
-        }}
-      >
-        <div className="flex items-center gap-2 mb-6">
-          <Shield className="w-5 h-5" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-              Project Configuration
-            </h2>
-            <p className="text-sm" style={{ color: '#736a62' }}>
-              Manage your project settings and preferences
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {/* Email Notifications Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Bell className="w-5 h-5" style={{ color: '#736a62' }} strokeWidth={1.5} />
-              <div>
-                <p className="font-medium" style={{ color: '#1a1512' }}>
-                  Email Notifications
-                </p>
-                <p className="text-sm" style={{ color: '#736a62' }}>
-                  Receive updates about flag changes
-                </p>
-              </div>
-            </div>
-            
-            {/* Custom Toggle Switch */}
-            <button
-              onClick={() => setEmailNotifications(!emailNotifications)}
-              className="relative rounded-full transition-all duration-200"
-              style={{
-                width: '52px',
-                height: '28px',
-                backgroundColor: emailNotifications ? '#a67c52' : '#e5e7eb'
-              }}
-            >
-              <div
-                className="absolute top-1 rounded-full bg-white transition-all duration-200 shadow-sm"
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  left: emailNotifications ? '28px' : '4px'
-                }}
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Full Name</label>
+              <input
+                type="text"
+                value={user?.name || ''}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-[#0a0a0a] border border-white/5 text-sm text-gray-500 cursor-not-allowed"
               />
-            </button>
-          </div>
-
-          {/* Two-Factor Auth Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5" style={{ color: '#736a62' }} strokeWidth={1.5} />
-              <div>
-                <p className="font-medium" style={{ color: '#1a1512' }}>
-                  Two-Factor Authentication
-                </p>
-                <p className="text-sm" style={{ color: '#736a62' }}>
-                  Add an extra layer of security
-                </p>
-              </div>
             </div>
-            
-            {/* Custom Toggle Switch */}
-            <button
-              onClick={() => setTwoFactorAuth(!twoFactorAuth)}
-              className="relative rounded-full transition-all duration-200"
-              style={{
-                width: '52px',
-                height: '28px',
-                backgroundColor: twoFactorAuth ? '#a67c52' : '#e5e7eb'
-              }}
-            >
-              <div
-                className="absolute top-1 rounded-full bg-white transition-all duration-200 shadow-sm"
-                style={{
-                  width: '20px',
-                  height: '20px',
-                  left: twoFactorAuth ? '28px' : '4px'
-                }}
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">Email Address</label>
+              <input
+                type="email"
+                value={user?.email || ''}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg bg-[#0a0a0a] border border-white/5 text-sm text-gray-500 cursor-not-allowed"
               />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* API Keys Information */}
-      <section
-        className="rounded-xl p-6 border"
-        style={{ 
-          backgroundColor: '#ffffff',
-          borderColor: '#f3f4f6'
-        }}
-      >
-        <div className="flex items-center gap-2 mb-6">
-          <Key className="w-5 h-5" style={{ color: '#a67c52' }} strokeWidth={1.5} />
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: '#1a1512' }}>
-              API Keys
-            </h2>
-            <p className="text-sm" style={{ color: '#736a62' }}>
-              Manage authentication for your applications
-            </p>
+            </div>
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border bg-gray-50 text-gray-600 text-sm">
-          <p>
-            API keys are unique to each project. To view or rotate an API key, please visit the <strong>Project Details</strong> page for the specific project you want to configure.
+        {/* Project Configuration */}
+        <div className="bento-surface inner-glow rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+            <h2 className="text-sm font-medium text-white">Preferences</h2>
+          </div>
+
+          <div className="space-y-4">
+            {/* Email Notifications */}
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-3">
+                <Bell className="w-4 h-4 text-gray-500" strokeWidth={2} />
+                <div>
+                  <p className="text-sm text-white">Email Notifications</p>
+                  <p className="text-xs text-gray-600">Receive updates about flag changes</p>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setEmailNotifications(!emailNotifications)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  emailNotifications ? 'bg-[#f59e0b]' : 'bg-white/10'
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  emailNotifications ? 'translate-x-5' : 'translate-x-0.5'
+                }`}/>
+              </button>
+            </div>
+
+            {/* Two-Factor Auth */}
+            <div className="flex items-center justify-between py-2 border-t border-white/5">
+              <div className="flex items-center gap-3">
+                <Shield className="w-4 h-4 text-gray-500" strokeWidth={2} />
+                <div>
+                  <p className="text-sm text-white">Two-Factor Authentication</p>
+                  <p className="text-xs text-gray-600">Add extra security to your account</p>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setTwoFactorAuth(!twoFactorAuth)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  twoFactorAuth ? 'bg-[#f59e0b]' : 'bg-white/10'
+                }`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  twoFactorAuth ? 'translate-x-5' : 'translate-x-0.5'
+                }`}/>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* API Keys Info */}
+        <div className="bento-surface inner-glow rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Key className="w-4 h-4 text-[#f59e0b]" strokeWidth={2} />
+            <h2 className="text-sm font-medium text-white">API Keys</h2>
+          </div>
+
+          <p className="text-xs text-gray-500 leading-relaxed">
+            API keys are unique to each project. Visit <span className="text-white font-medium">Project Details</span> to view or rotate keys for specific projects.
           </p>
         </div>
-      </section>
 
-      {/* Danger Zone */}
-      <section
-        className="rounded-xl p-6 border"
-        style={{ 
-          backgroundColor: '#ffffff',
-          borderColor: '#fca5a5'
-        }}
-      >
-        <div className="flex items-center gap-2 mb-6">
-          <Trash2 className="w-5 h-5" style={{ color: '#b91c1c' }} strokeWidth={1.5} />
-          <div>
-            <h2 className="text-xl font-semibold" style={{ color: '#991b1b' }}>
-              Danger Zone
-            </h2>
-            <p className="text-sm" style={{ color: '#736a62' }}>
-              Irreversible and destructive actions
-            </p>
-          </div>
-        </div>
-
-        <div 
-          className="p-4 rounded-xl border flex items-center justify-between"
-          style={{
-            backgroundColor: '#fef2f2',
-            borderColor: '#fca5a5'
-          }}
-        >
-          <div>
-            <h4 className="font-semibold text-red-900">Delete All Projects</h4>
-            <p className="text-sm text-red-600">
-              Permanently delete ALL your projects and flags. This cannot be undone.
-            </p>
+        {/* Danger Zone */}
+        <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Trash2 className="w-4 h-4 text-red-400" strokeWidth={2} />
+            <h2 className="text-sm font-medium text-red-300">Danger Zone</h2>
           </div>
 
-          <button
-            onClick={() => {
-              if (confirm('WARNING: Are you sure you want to delete ALL projects? This will wipe all data and invalidate all API keys.')) {
-                 ProjectAPI.deleteAllProjects()
-                   .then(() => window.location.href = '/')
-                   .catch(err => alert('Failed to delete projects: ' + err.message));
-              }
-            }}
-            className="px-4 py-2 rounded-xl font-medium transition-all"
-            style={{
-              backgroundColor: '#b91c1c',
-              color: '#ffffff'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#991b1b';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#b91c1c';
-            }}
-          >
-            Delete All Projects
-          </button>
+          <div className="flex items-center justify-between p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+            <div>
+              <h4 className="text-sm font-medium text-red-300">Delete All Projects</h4>
+              <p className="text-xs text-red-400/70 mt-0.5">
+                Permanently delete all projects and flags. Cannot be undone.
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (confirm('WARNING: Delete ALL projects? This will wipe all data.')) {
+                  ProjectAPI.deleteAllProjects()
+                    .then(() => window.location.href = '/')
+                    .catch(err => alert('Failed: ' + err.message));
+                }
+              }}
+              className="px-4 py-2 rounded-lg font-medium text-sm transition-colors bg-red-600 text-white hover:bg-red-700"
+            >
+              Delete All
+            </button>
+          </div>
         </div>
-      </section>
-    </div>
+      </motion.div>
     </ProtectedPage>
   );
 }

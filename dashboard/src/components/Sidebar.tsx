@@ -1,119 +1,80 @@
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  Code2, 
-  Settings,
-  Coffee
-} from 'lucide-react';
-
-const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Projects' },
-  { path: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { path: '/sdk', icon: Code2, label: 'SDK' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
-];
+import { NavLink, useLocation } from 'react-router-dom';
+import { Flag, BarChart, Settings, Code, LayoutGrid } from 'lucide-react';
+import { useState } from 'react';
 
 export default function Sidebar() {
+  const [isExpanded, setIsExpanded] = useState(false);
   const location = useLocation();
 
+  const navItems = [
+    { icon: LayoutGrid, label: 'Projects', path: '/app/dashboard' },
+    { icon: BarChart, label: 'Analytics', path: '/app/analytics' },
+    { icon: Code, label: 'SDK', path: '/app/sdk' },
+    { icon: Settings, label: 'Settings', path: '/app/settings' },
+  ];
+
   return (
-    <aside 
-      className="w-64 h-screen flex flex-col sticky top-0"
-      style={{ backgroundColor: '#2c2420' }}
+    <div
+      className="h-full border-r border-white/5 bg-[#0a0a0a] transition-all duration-200 relative group"
+      style={{ width: isExpanded ? '200px' : '60px' }}
+      onMouseEnter={() => setIsExpanded(true)}
+      onMouseLeave={() => setIsExpanded(false)}
     >
-      {/* Logo */}
-      <div 
-        className="p-6"
-        style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}
-      >
-        <div className="flex items-center gap-3">
-          <div 
-            className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ backgroundColor: '#a67c52' }}
-          >
-            <Coffee className="w-6 h-6 text-white" strokeWidth={1.5} />
-          </div>
-          <div>
-            <h1 className="text-lg font-semibold text-white" style={{ letterSpacing: '0.02em' }}>
-              FlagForge
-            </h1>
-            <p className="text-xs" style={{ color: '#736a62' }}>
-              Feature Platform
-            </p>
-          </div>
+      {/* Logo Section */}
+      <div className="h-12 flex items-center justify-center border-b border-white/5">
+        <div className="w-8 h-8 rounded-lg accent-gold flex items-center justify-center">
+          <Flag className="w-4 h-4 text-white" strokeWidth={2} />
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-8 space-y-2">
+      <nav className="py-4 px-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
+
           return (
-            <Link
+            <NavLink
               key={item.path}
               to={item.path}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200"
-              style={{
-                backgroundColor: isActive ? '#a67c52' : 'transparent',
-                color: isActive ? '#ffffff' : '#736a62',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-                  e.currentTarget.style.color = '#ffffff';
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all relative
+                ${isActive 
+                  ? 'bg-white/5 text-white' 
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.02]'
                 }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#736a62';
-                }
-              }}
+              `}
             >
-              <Icon className="w-5 h-5" strokeWidth={1.5} />
-              <span className="font-medium" style={{ letterSpacing: '0.02em' }}>
-                {item.label}
-              </span>
-            </Link>
+              {/* Active Indicator */}
+              {isActive && (
+                <div className="absolute left-0 w-0.5 h-5 accent-gold rounded-r" />
+              )}
+
+              {/* Icon */}
+              <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+
+              {/* Label - Only visible when expanded */}
+              {isExpanded && (
+                <span className="text-xs font-medium whitespace-nowrap overflow-hidden">
+                  {item.label}
+                </span>
+              )}
+            </NavLink>
           );
         })}
       </nav>
 
-      {/* System Status */}
-      <div 
-        className="p-4"
-        style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}
-      >
-        <div 
-          className="flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }}
-        >
-          <div className="relative flex h-2.5 w-2.5">
-            <span 
-              className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-              style={{ 
-                backgroundColor: '#fbbf24',
-                filter: 'sepia(0.5)'
-              }}
-            />
-            <span 
-              className="relative inline-flex rounded-full h-2.5 w-2.5"
-              style={{ backgroundColor: '#f59e0b' }}
-            />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-medium text-white" style={{ letterSpacing: '0.02em' }}>
-              System Operational
-            </p>
-            <p className="text-xs" style={{ color: '#736a62' }}>
-              All services running
-            </p>
+      {/* System Status - Bottom */}
+      <div className="absolute bottom-4 left-0 right-0 px-2">
+        <div className="bento-surface rounded-lg p-2">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-dot-active" />
+            {isExpanded && (
+              <span className="text-xs text-gray-400">All systems operational</span>
+            )}
           </div>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }
