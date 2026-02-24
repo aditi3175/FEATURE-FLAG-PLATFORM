@@ -1,6 +1,6 @@
 import { motion, useMotionValue } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowRight, ChevronRight, Code, Zap, Shield, Terminal, Check } from 'lucide-react';
+import { ArrowRight, ChevronRight, Code, Zap, Shield, Terminal, Check, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import AuthButton from '../components/AuthButton';
@@ -321,6 +321,295 @@ const Footer = () => (
   </footer>
 );
 
+const InteractiveDemo = () => {
+  const [flags, setFlags] = useState({
+    promoBanner: true,
+    darkMode: false,
+    newPricing: false,
+  });
+  const [testUserId, setTestUserId] = useState('user-123');
+
+  const toggleFlag = (key: keyof typeof flags) => {
+    setFlags(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const flagConfigs = [
+    { key: 'promoBanner' as const, label: 'promo-banner', description: 'Show promotional banner', activeBg: 'bg-amber-500/10 border border-amber-500/20', activeText: 'text-amber-400' },
+    { key: 'darkMode' as const, label: 'dark-mode', description: 'Enable dark mode theme', activeBg: 'bg-purple-500/10 border border-purple-500/20', activeText: 'text-purple-400' },
+    { key: 'newPricing' as const, label: 'new-pricing', description: 'Show new pricing tier', activeBg: 'bg-emerald-500/10 border border-emerald-500/20', activeText: 'text-emerald-400' },
+  ];
+
+  return (
+    <section className="py-24 px-6 relative z-10">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-medium text-amber-400 mb-4">
+            🎮 Interactive Demo
+          </div>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4">Try It Yourself</h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Toggle the flags below and watch the app change in real-time. No signup required.
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column: Live Preview + SDK Code */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="space-y-4"
+          >
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 font-medium">Live Preview</div>
+            <div
+              className={`rounded-2xl border overflow-hidden transition-all duration-500 ${
+                flags.darkMode
+                  ? 'bg-[#0c0c0c] border-white/10'
+                  : 'bg-white border-gray-200'
+              }`}
+            >
+              {/* Mock Browser Bar */}
+              <div className={`flex items-center gap-2 px-4 py-2.5 border-b transition-colors duration-500 ${
+                flags.darkMode ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-gray-50'
+              }`}>
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-400/70" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+                </div>
+                <div className={`flex-1 text-center text-xs font-mono transition-colors duration-500 ${
+                  flags.darkMode ? 'text-gray-500' : 'text-gray-400'
+                }`}>
+                  mystore.com/products
+                </div>
+              </div>
+
+              {/* Mock App Content */}
+              <div className="p-6">
+                {/* Promo Banner */}
+                <motion.div
+                  initial={false}
+                  animate={{
+                    height: flags.promoBanner ? 'auto' : 0,
+                    opacity: flags.promoBanner ? 1 : 0,
+                    marginBottom: flags.promoBanner ? 16 : 0,
+                  }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg px-4 py-2.5 text-white text-sm font-medium flex items-center justify-between">
+                    <span>🔥 Summer Sale — 50% off all plans!</span>
+                    <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Limited</span>
+                  </div>
+                </motion.div>
+
+                {/* Product Card */}
+                <div className="flex gap-4">
+                  <div className={`w-20 h-20 rounded-xl flex items-center justify-center text-3xl flex-shrink-0 transition-colors duration-500 ${
+                    flags.darkMode ? 'bg-white/5' : 'bg-gray-100'
+                  }`}>
+                    📦
+                  </div>
+                  <div className="flex-1">
+                    <h3 className={`text-base font-bold transition-colors duration-500 ${
+                      flags.darkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      Pro Starter Kit
+                    </h3>
+                    <p className={`text-xs mt-1 transition-colors duration-500 ${
+                      flags.darkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
+                      Everything you need to ship fast
+                    </p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <motion.span
+                        key={flags.newPricing ? 'new' : 'old'}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`text-lg font-bold transition-colors duration-500 ${
+                          flags.darkMode ? 'text-white' : 'text-gray-900'
+                        }`}
+                      >
+                        {flags.newPricing ? '$19/mo' : '$29/mo'}
+                      </motion.span>
+                      {flags.newPricing && (
+                        <motion.span
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full font-medium border border-emerald-500/20"
+                        >
+                          34% off
+                        </motion.span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                <button className={`w-full mt-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-500 ${
+                  flags.darkMode
+                    ? 'bg-white text-black hover:bg-gray-200'
+                    : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}>
+                  Get Started →
+                </button>
+              </div>
+            </div>
+
+            {/* Evaluation Tester */}
+            <div className="text-xs text-gray-500 uppercase tracking-wider mt-2 mb-3 font-medium">🧪 Test Evaluation</div>
+            <div className="rounded-xl bg-[#0c0c0c] border border-white/5 p-5">
+              <div className="flex gap-3 mb-4">
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-600 uppercase tracking-wider mb-1 block">User ID</label>
+                  <input
+                    type="text"
+                    value={testUserId}
+                    onChange={(e) => setTestUserId(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+                    placeholder="user-123"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-600 uppercase tracking-wider mb-1 block">Flag</label>
+                  <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono text-amber-400">
+                    promo-banner
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  flags.promoBanner ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {flags.promoBanner ? '✓' : '✗'}
+                </div>
+                <div>
+                  <div className="text-sm text-white font-medium">
+                    Result: <span className={flags.promoBanner ? 'text-emerald-400' : 'text-red-400'}>{flags.promoBanner ? 'ENABLED' : 'DISABLED'}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 font-mono">
+                    bucket: {Math.abs((testUserId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 31) % 100)}/100 · rollout: {flags.promoBanner ? '50%' : '0%'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Right Column: SDK Code + Feature Flags */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="space-y-4"
+          >
+            {/* SDK Code */}
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 font-medium">SDK Code</div>
+            <div className="rounded-xl bg-[#0c0c0c] border border-white/5 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-amber-500/50" />
+                  <span className="text-xs text-gray-500 font-mono">app.ts</span>
+                </div>
+                <span className="text-[10px] text-gray-600 font-mono">TypeScript</span>
+              </div>
+              <pre className="p-4 text-xs font-mono leading-relaxed overflow-x-auto">
+                <code>
+                  <span className="text-purple-400">const</span>{' '}
+                  <span className="text-blue-300">promo</span>{' = '}
+                  <span className="text-amber-300">client</span>
+                  <span className="text-white">.getVariant(</span>
+                  <span className="text-emerald-300">'promo-banner'</span>
+                  <span className="text-white">, userId);</span>{'\n'}
+                  <span className="text-purple-400">const</span>{' '}
+                  <span className="text-blue-300">theme</span>{' = '}
+                  <span className="text-amber-300">client</span>
+                  <span className="text-white">.getVariant(</span>
+                  <span className="text-emerald-300">'dark-mode'</span>
+                  <span className="text-white">, userId);</span>{'\n'}
+                  <span className="text-purple-400">const</span>{' '}
+                  <span className="text-blue-300">price</span>{' = '}
+                  <span className="text-amber-300">client</span>
+                  <span className="text-white">.getVariant(</span>
+                  <span className="text-emerald-300">'new-pricing'</span>
+                  <span className="text-white">, userId);</span>{'\n\n'}
+                  <span className="text-gray-500">{'// Results right now:'}</span>{'\n'}
+                  <span className="text-gray-500">{'// '}</span>
+                  <span className="text-white">promo</span>
+                  <span className="text-gray-500">{' → '}</span>
+                  <span className={flags.promoBanner ? 'text-emerald-400' : 'text-red-400'}>
+                    {flags.promoBanner ? 'true' : 'false'}
+                  </span>{'\n'}
+                  <span className="text-gray-500">{'// '}</span>
+                  <span className="text-white">theme</span>
+                  <span className="text-gray-500">{' → '}</span>
+                  <span className={flags.darkMode ? 'text-emerald-400' : 'text-red-400'}>
+                    {flags.darkMode ? 'true' : 'false'}
+                  </span>{'\n'}
+                  <span className="text-gray-500">{'// '}</span>
+                  <span className="text-white">price</span>
+                  <span className="text-gray-500">{' → '}</span>
+                  <span className={flags.newPricing ? 'text-emerald-400' : 'text-red-400'}>
+                    {flags.newPricing ? 'true' : 'false'}
+                  </span>
+                </code>
+              </pre>
+            </div>
+
+            {/* Flag Toggles */}
+            <div className="text-xs text-gray-500 uppercase tracking-wider mt-2 mb-3 font-medium">Feature Flags</div>
+            <div className="space-y-3">
+              {flagConfigs.map((flag) => (
+                <button
+                  key={flag.key}
+                  onClick={() => toggleFlag(flag.key)}
+                  className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-200 ${
+                    flags[flag.key]
+                      ? 'bg-[#0c0c0c] border-white/10'
+                      : 'bg-[#0c0c0c] border-white/5 opacity-60 hover:opacity-80'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                      flags[flag.key]
+                        ? flag.activeBg
+                        : 'bg-white/5 border border-white/5'
+                    }`}>
+                      <Code className={`w-4 h-4 transition-colors ${
+                        flags[flag.key] ? flag.activeText : 'text-gray-600'
+                      }`} />
+                    </div>
+                    <div className="text-left">
+                      <div className={`text-sm font-mono font-medium transition-colors ${
+                        flags[flag.key] ? 'text-white' : 'text-gray-500'
+                      }`}>
+                        {flag.label}
+                      </div>
+                      <div className="text-xs text-gray-500">{flag.description}</div>
+                    </div>
+                  </div>
+                  {flags[flag.key] ? (
+                    <ToggleRight className="w-7 h-7 text-amber-400" />
+                  ) : (
+                    <ToggleLeft className="w-7 h-7 text-gray-600" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 // Helper Icon for Bento Mock
 const BarChartIcon = ({ className }: { className?: string }) => (
   <svg 
@@ -346,6 +635,7 @@ export default function LandingPage() {
       <Navbar />
       <Hero />
       <Features />
+      <InteractiveDemo />
       <Footer />
     </div>
   );
