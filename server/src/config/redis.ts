@@ -1,19 +1,25 @@
 import Redis from 'ioredis';
 
-const redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  retryStrategy(times) {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  maxRetriesPerRequest: 3,
-});
+let redisClient: Redis | null = null;
 
-redisClient.on('connect', () => {
-  console.log('✅ Redis connected successfully');
-});
+if (process.env.REDIS_URL) {
+  redisClient = new Redis(process.env.REDIS_URL, {
+    retryStrategy(times) {
+      const delay = Math.min(times * 50, 2000);
+      return delay;
+    },
+    maxRetriesPerRequest: 3,
+  });
 
-redisClient.on('error', (err) => {
-  console.error('❌ Redis connection error:', err);
-});
+  redisClient.on('connect', () => {
+    console.log('✅ Redis connected successfully');
+  });
+
+  redisClient.on('error', (err) => {
+    console.error('❌ Redis connection error:', err);
+  });
+} else {
+  console.log('ℹ️  Redis not configured — running without cache');
+}
 
 export default redisClient;

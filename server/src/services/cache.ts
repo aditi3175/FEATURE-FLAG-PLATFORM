@@ -18,36 +18,33 @@ function getCacheKey(projectId: string, flagKey: string): string {
 export async function getFlag(projectId: string, flagKey: string) {
   const cacheKey = getCacheKey(projectId, flagKey);
 
-  try {
-    // Try to get from cache first
-    const cached = await redisClient.get(cacheKey);
-    
-    if (cached) {
-      return JSON.parse(cached);
+  if (redisClient) {
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error('Cache read error:', error);
     }
-  } catch (error) {
-    console.error('Cache read error:', error);
-    // Continue to database on cache error
   }
 
-  // Cache miss - fetch from database
+  // Cache miss or no Redis - fetch from database
   const flag = await prisma.flag.findUnique({
     where: {
       projectId_key_environment: {
         projectId,
         key: flagKey,
-        environment: 'Production', // Default to Production environment
+        environment: 'Production',
       },
     },
   });
 
-  if (flag) {
+  if (flag && redisClient) {
     try {
-      // Store in cache for future requests
       await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(flag));
     } catch (error) {
       console.error('Cache write error:', error);
-      // Don't fail the request if cache write fails
     }
   }
 
@@ -58,8 +55,9 @@ export async function getFlag(projectId: string, flagKey: string) {
  * Invalidate flag cache when it's updated
  */
 export async function invalidateFlag(projectId: string, flagKey: string): Promise<void> {
+  if (!redisClient) return;
   const cacheKey = getCacheKey(projectId, flagKey);
-  
+
   try {
     await redisClient.del(cacheKey);
   } catch (error) {
@@ -71,6 +69,8 @@ export async function invalidateFlag(projectId: string, flagKey: string): Promis
  * Warm cache by loading all flags for a project
  */
 export async function warmCache(projectId: string): Promise<void> {
+  if (!redisClient) return;
+
   const flags = await prisma.flag.findMany({
     where: { projectId },
   });
