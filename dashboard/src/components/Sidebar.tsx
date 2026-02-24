@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Flag, BarChart, Settings, Code, LayoutGrid } from 'lucide-react';
+import { Zap, BarChart, Settings, Code, LayoutGrid, ClipboardList } from 'lucide-react';
 import { useState } from 'react';
 
 export default function Sidebar() {
@@ -7,8 +7,10 @@ export default function Sidebar() {
   const location = useLocation();
 
   const navItems = [
+    { icon: Zap, label: 'Home', path: '/' },
     { icon: LayoutGrid, label: 'Projects', path: '/app/dashboard' },
     { icon: BarChart, label: 'Analytics', path: '/app/analytics' },
+    { icon: ClipboardList, label: 'Audit Log', path: '/app/audit-log' },
     { icon: Code, label: 'SDK', path: '/app/sdk' },
     { icon: Settings, label: 'Settings', path: '/app/settings' },
   ];
@@ -23,7 +25,7 @@ export default function Sidebar() {
       {/* Logo Section */}
       <div className="h-12 flex items-center justify-center border-b border-white/5">
         <div className="w-8 h-8 rounded-lg accent-gold flex items-center justify-center">
-          <Flag className="w-4 h-4 text-white" strokeWidth={2} />
+          <Zap className="w-4 h-4 text-white fill-white" strokeWidth={2} />
         </div>
       </div>
 

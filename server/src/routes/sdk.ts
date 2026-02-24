@@ -38,8 +38,12 @@ router.get('/flags', async (req: Request, res: Response): Promise<void> => {
             key: true,
             description: true,
             status: true,
+            type: true,
             rolloutPercentage: true,
-            targetingRules: true,
+            targetingRules: true, // Cast to any to bypass stale Prisma types
+            variants: true,
+            defaultVariantId: true,
+            offVariantId: true,
             environment: true,
           } as any,
         },
@@ -121,9 +125,13 @@ router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
     const result = evaluateFlag(
       {
         key: flag.key,
+        type: flag.type,
         status: flag.status,
         rolloutPercentage: flag.rolloutPercentage,
         targetingRules: flag.targetingRules as any,
+        variants: flag.variants as any,
+        defaultVariantId: flag.defaultVariantId,
+        offVariantId: flag.offVariantId
       },
       userId
     );

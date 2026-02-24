@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     TokenService.removeToken();
     setIsAuthenticated(false);
     setUser(null);
+    window.location.href = '/';
   };
 
   return (

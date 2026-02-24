@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database';
 import { invalidateFlag } from '../services/cache';
+import { logAudit, computeChanges } from '../services/auditService';
 
 /**
  * Get all flags for a specific project
@@ -51,10 +52,14 @@ export async function getFlagsByProject(req: Request, res: Response): Promise<vo
  * Create a new flag for a specific project
  * POST /api/projects/:projectId/flags
  */
+  /**
+ * Create a new flag for a specific project
+ * POST /api/projects/:projectId/flags
+ */
 export async function createFlag(req: Request, res: Response): Promise<void> {
   try {
     const projectId = req.params.projectId as string;
-    const { key, description, status, rolloutPercentage, targetingRules, environment } = req.body;
+    const { key, description, status, rolloutPercentage, targetingRules, environment, type, variants, defaultVariantId, offVariantId } = req.body;
 
     // Validation
     if (!key) {
@@ -109,8 +114,24 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
         rolloutPercentage: rolloutPercentage !== undefined ? rolloutPercentage : 0,
         environment: env,
         targetingRules: targetingRules || {},
-      } as any, // Cast to any to bypass stale Prisma type definition
+        type: type || 'BOOLEAN',
+        variants: variants || [],
+        defaultVariantId: defaultVariantId,
+        offVariantId: offVariantId
+      } as any, 
     });
+
+    // Audit log — fire and forget
+    if (req.user) {
+      logAudit({
+        projectId,
+        userId: req.user.userId,
+        action: 'flag.created',
+        entityId: flag.id,
+        entityName: flag.key,
+        changes: { after: flag },
+      });
+    }
 
     res.status(201).json(flag);
   } catch (error: any) {
@@ -133,7 +154,7 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
 export async function updateFlag(req: Request, res: Response): Promise<void> {
   try {
     const flagId = req.params.flagId as string;
-    const { key, description, status, rolloutPercentage, targetingRules, environment } = req.body;
+    const { key, description, status, rolloutPercentage, targetingRules, environment, type, variants, defaultVariantId, offVariantId } = req.body;
 
     // Validation
     if (rolloutPercentage !== undefined && (rolloutPercentage < 0 || rolloutPercentage > 100)) {
@@ -177,6 +198,10 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
     if (rolloutPercentage !== undefined) updateData.rolloutPercentage = rolloutPercentage;
     if (targetingRules !== undefined) updateData.targetingRules = targetingRules;
     if (environment !== undefined) updateData.environment = environment;
+    if (type !== undefined) updateData.type = type;
+    if (variants !== undefined) updateData.variants = variants;
+    if (defaultVariantId !== undefined) updateData.defaultVariantId = defaultVariantId;
+    if (offVariantId !== undefined) updateData.offVariantId = offVariantId;
 
     const flag = await prisma.flag.update({
       where: { id: flagId },
@@ -185,6 +210,19 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
 
     // Invalidate cache after update
     await invalidateFlag(flag.projectId, flag.key);
+
+    // Audit log — fire and forget
+    if (req.user) {
+      const isToggle = Object.keys(updateData).length === 1 && updateData.status !== undefined;
+      logAudit({
+        projectId: flag.projectId,
+        userId: req.user.userId,
+        action: isToggle ? 'flag.toggled' : 'flag.updated',
+        entityId: flag.id,
+        entityName: flag.key,
+        changes: computeChanges(existingFlag as any, flag as any),
+      });
+    }
 
     res.json(flag);
   } catch (error: any) {
@@ -229,6 +267,18 @@ export async function deleteFlag(req: Request, res: Response): Promise<void> {
     await prisma.flag.delete({
       where: { id: flagId },
     });
+
+    // Audit log — fire and forget
+    if (req.user) {
+      logAudit({
+        projectId: flag.projectId,
+        userId: req.user.userId,
+        action: 'flag.deleted',
+        entityId: flag.id,
+        entityName: flag.key,
+        changes: { before: flag },
+      });
+    }
 
     res.status(204).send();
   } catch (error: any) {

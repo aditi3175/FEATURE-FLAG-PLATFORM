@@ -1,8 +1,9 @@
 import { motion, useMotionValue } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronRight, Code, Zap, Shield, Terminal } from 'lucide-react';
-import { useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowRight, ChevronRight, Code, Zap, Shield, Terminal, Check } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import AuthButton from '../components/AuthButton';
 
 // Glowing background effect component
 const GlowBackground = () => {
@@ -45,8 +46,8 @@ const Navbar = () => {
 
       <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
         <a href="#features" className="hover:text-white transition-colors">Features</a>
-        <a href="#docs" className="hover:text-white transition-colors">Docs</a>
-        <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
+        <Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link>
+        <Link to="/docs" className="hover:text-white transition-colors">Docs</Link>
       </div>
 
       <div className="flex items-center gap-4">
@@ -58,20 +59,7 @@ const Navbar = () => {
             Go to Dashboard <ArrowRight className="w-4 h-4" />
           </button>
         ) : (
-          <>
-            <button 
-              onClick={() => navigate('/app/dashboard')}
-              className="text-gray-400 hover:text-white text-sm font-medium transition-colors"
-            >
-              Login
-            </button>
-            <button 
-              onClick={() => navigate('/app/dashboard')}
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white text-sm font-bold shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-105 transition-all animate-pulse-subtle"
-            >
-              Get Started
-            </button>
-          </>
+          <AuthButton />
         )}
       </div>
     </nav>
@@ -79,7 +67,8 @@ const Navbar = () => {
 };
 
 const Hero = () => {
-  const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
+  
   return (
     <section className="relative pt-32 pb-20 px-6 min-h-screen flex flex-col items-center justify-center text-center z-10">
       <motion.div
@@ -106,21 +95,41 @@ const Hero = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-          <button 
-            onClick={() => navigate('/app/dashboard')}
-            className="px-8 py-4 rounded-xl bg-white text-black font-bold text-lg hover:bg-gray-100 transition-all transform hover:scale-105 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
-          >
-            Create Free Account
-          </button>
+          <div className="hidden sm:block">
+             <AuthButton 
+               mode="signup"
+               className="px-8 py-4 rounded-xl bg-white text-black font-bold text-lg hover:bg-gray-100 transition-all transform hover:scale-105 shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)]"
+             >
+               Create Free Account
+             </AuthButton>
+          </div>
+          
           <button 
             onClick={() => {
               navigator.clipboard.writeText('npm install flagforge');
-              // Optional: Add toast notification here
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
             }}
-            className="px-8 py-4 rounded-xl bg-white/5 text-white font-medium text-lg border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2 group active:scale-95"
+            className="px-8 py-4 rounded-xl bg-white/5 text-white font-medium text-lg border border-white/10 hover:bg-white/10 transition-all flex items-center gap-2 group active:scale-95 relative"
           >
-            <Terminal className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
-            <span>npm install flagforge</span>
+            {copied ? (
+              <Check className="w-5 h-5 text-emerald-500" />
+            ) : (
+              <Terminal className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+            )}
+            <span>{copied ? 'Copied!' : 'npm install flagforge'}</span>
+            
+            {/* Toast/Tooltip Effect */}
+            {copied && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: -20 }}
+                exit={{ opacity: 0 }}
+                className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold"
+              >
+                Copied!
+              </motion.div>
+            )}
           </button>
         </div>
       </motion.div>

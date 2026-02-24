@@ -16,8 +16,12 @@ interface FlagType {
   description: string;
   environment: string;
   status: boolean;
+  type: 'BOOLEAN' | 'MULTIVARIATE';
   rolloutPercentage: number;
   targetingRules: any;
+  variants: any[];
+  defaultVariantId?: string;
+  offVariantId?: string;
   createdAt: string;
 }
 
@@ -31,7 +35,7 @@ export default function ProjectDetails() {
   const navigate = useNavigate();
   
   const [project, setProject] = useState<Project | null>(null);
- const [flags, setFlags] = useState<FlagType[]>([]);
+  const [flags, setFlags] = useState<FlagType[]>([]);
   const [loading, setLoading] = useState(true);
   const [envFilter, setEnvFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -198,6 +202,7 @@ export default function ProjectDetails() {
               <thead>
                 <tr className="border-b border-white/5">
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flag</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Env</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rollout</th>
@@ -216,6 +221,15 @@ export default function ProjectDetails() {
                     <td className="px-4 py-3">
                       <div className="font-mono text-xs text-white font-medium">{flag.key}</div>
                       {flag.description && <div className="text-xs text-gray-600 truncate max-w-xs mt-0.5">{flag.description}</div>}
+                    </td>
+                    <td className="px-4 py-3">
+                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${
+                         flag.type === 'MULTIVARIATE' 
+                           ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' 
+                           : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                       }`}>
+                        {flag.type === 'MULTIVARIATE' ? 'Multi' : 'Bool'}
+                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -322,8 +336,12 @@ export default function ProjectDetails() {
           description: editingFlag.description,
           environment: editingFlag.environment,
           status: editingFlag.status,
+          type: editingFlag.type,
           rolloutPercentage: editingFlag.rolloutPercentage,
-          targetingRules: editingFlag.targetingRules
+          targetingRules: editingFlag.targetingRules,
+          variants: editingFlag.variants,
+          defaultVariantId: editingFlag.defaultVariantId,
+          offVariantId: editingFlag.offVariantId
         } : null}
       />
 

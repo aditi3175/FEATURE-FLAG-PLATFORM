@@ -1,276 +1,291 @@
-# FlagForge - Feature Flag Management Platform 🚩
+<div align="center">
 
-A production-ready feature flag management platform that enables safe feature rollouts, A/B testing, and instant rollbacks without code redeployment.
+# ⚡ FlagForge
 
-## 🎯 Features
+### Release with Confidence, Not Chaos.
 
-- **Feature Flags**: Toggle features on/off instantly without deploying
-- **Percentage Rollout**: Gradually roll out features to a percentage of users
-- **User Targeting**: Whitelist/blacklist specific users
-- **Kill Switch**: Emergency off-switch for any feature
-- **A/B Testing**: Run experiments with deterministic user assignment
-- **Real-time Updates**: Changes propagate through Redis caching
-- **Beautiful Dashboard**: Modern React UI for managing flags
-- **JavaScript SDK**: Easy integration with any application
+A modern, production-ready **feature flag & A/B testing platform** for high-velocity engineering teams.  
+Decouple deploy from release and ship faster with safety.
+
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5+-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org)
+[![npm](https://img.shields.io/npm/v/flagforge-node-sdk?label=SDK&color=CB3837&logo=npm)](https://www.npmjs.com/package/flagforge-node-sdk)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+</div>
+
+---
+
+![Landing Page](screenshots/landing.png)
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 🚩 **Feature Flags** | Toggle features on/off instantly — no deploys needed |
+| 🔀 **Multivariate (A/B/n)** | Test multiple variants with weighted rollouts |
+| 🎯 **User Targeting** | Allowlist/blocklist specific users per flag |
+| 📊 **Real-time Analytics** | Live evaluation metrics, top flags, and latency tracking |
+| 📝 **Audit Logs** | Full timeline of every change with before/after diffs |
+| 🔑 **Per-project API Keys** | Isolated projects with auto-generated secure keys |
+| ⌨️ **Command Palette** | ⌘K to search flags, navigate, and take actions instantly |
+| 📦 **Published SDK** | [`flagforge-node-sdk`](https://www.npmjs.com/package/flagforge-node-sdk) on npm |
+| 🛡️ **Kill Switch** | Emergency off-switch for any feature, instantly |
+| ⚡ **Redis Caching** | Sub-millisecond flag evaluation with automatic invalidation |
+
+---
+
+## 🖼️ Screenshots
+
+<details>
+<summary><b>📋 Project Dashboard</b> — Manage all your feature flag projects</summary>
+<br>
+
+![Dashboard](screenshots/dashboard.png)
+
+</details>
+
+<details>
+<summary><b>📊 Analytics</b> — Real-time evaluation metrics with trend graphs</summary>
+<br>
+
+![Analytics](screenshots/analytics.png)
+
+</details>
+
+<details>
+<summary><b>🔧 SDK Setup</b> — One-click API key copy & code examples</summary>
+<br>
+
+![SDK Setup](screenshots/sdk-setup.png)
+
+</details>
+
+<details>
+<summary><b>📐 Navigation</b> — Clean sidebar with all sections</summary>
+<br>
+
+![Sidebar](screenshots/sidebar.png)
+
+</details>
+
+---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐      ┌──────────────┐      ┌─────────────┐
-│  Dashboard      │─────▶│   Backend    │◀────▶│  PostgreSQL │
-│  (React + Vite) │      │ (Node/Express)│      │  (Flags DB) │
-└─────────────────┘      └──────┬───────┘      └─────────────┘
-                                │
-                                ▼
-                         ┌─────────────┐
-                         │    Redis    │
-                         │   (Cache)   │
-                         └─────────────┘
-                                ▲
-                                │
-                         ┌──────┴──────┐
-                         │     SDK     │
-                         │  Evaluation │
-                         └─────────────┘
+┌─────────────────┐      ┌──────────────────┐      ┌──────────────┐
+│    Dashboard    │─────▶│    Backend API   │◀────▶│  PostgreSQL │
+│  (React + Vite) │      │(Express + Prisma)│      │  (Flags DB)  │
+└─────────────────┘      └────────┬─────────┘      └──────────────┘
+                                  │
+                           ┌──────┴──────┐
+                           │    Redis    │
+                           │   (Cache)   │
+                           └──────┬──────┘
+                                  │
+                    ┌─────────────┴─────────────┐
+                    │    flagforge-node-sdk     │
+                    │  (npm published SDK)      │
+                    └───────────────────────────┘
 ```
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js 18+
-- PostgreSQL 14+
-- Redis 6+
+- **Node.js** 18+
+- **PostgreSQL** 14+
+- **Redis** 6+
 
 ### 1. Clone & Install
 
 ```bash
-git clone <your-repo-url>
-cd "Feature Flag"
+git clone https://github.com/aditi3175/feature-flag-platform.git
+cd feature-flag-platform
 
-# Install all dependencies
+# Install server
 cd server && npm install
+
+# Install dashboard
 cd ../dashboard && npm install
-cd ../sdk && npm install && npm run build
 ```
 
 ### 2. Configure Environment
 
 ```bash
-# Copy example env file
+# In /server, copy and edit .env
 cp .env.example .env
 ```
 
-Edit `.env`:
 ```env
-# Server
 PORT=4000
-NODE_ENV=development
-
-# Database (update with your credentials)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/flagforge"
-
-# Redis
 REDIS_URL="redis://localhost:6379"
-
-# CORS
-CORS_ORIGIN="http://localhost:5173"
+JWT_SECRET="your-secret-key"
 ```
 
 ### 3. Setup Database
 
 ```bash
 cd server
-npm run prisma:migrate
+npx prisma db push
 ```
 
-### 4. Start Services
+### 4. Start Development
 
-**Terminal 1 - Backend:**
 ```bash
-cd server
-npm run dev
+# Terminal 1 — Backend
+cd server && npm run dev
+
+# Terminal 2 — Dashboard
+cd dashboard && npm run dev
 ```
 
-**Terminal 2 - Dashboard:**
+### 5. Open Dashboard
+
+Visit **http://localhost:5173** → Create an account → Create a project → Start managing flags!
+
+---
+
+## 📦 SDK Usage
+
+Install the published SDK:
+
 ```bash
-cd dashboard
-npm run dev
+npm install flagforge-node-sdk
 ```
 
-### 5. Access Dashboard
+```typescript
+import { FlagForgeClient } from 'flagforge-node-sdk';
 
-Open http://localhost:5173 in your browser.
+const client = new FlagForgeClient({
+  apiKey: 'ff_prod_...',           // from dashboard
+  apiUrl: 'http://localhost:4000',
+  refreshInterval: 60000,          // poll every 60s
+});
 
-1. Create a new project
-2. Copy the API key
-3. Create your first feature flag
-4. Use the SDK to evaluate flags
+await client.init();
 
-## 📚 Documentation
+// Boolean flag
+const { enabled } = client.getVariant('dark-mode', 'user-123');
 
-### Backend API
+// Multivariate A/B test
+const { value, variantId } = client.getVariant('checkout-btn', 'user-123', 'blue');
+console.log(`Showing ${value} button`);
 
-See [server/README.md](server/README.md) for:
-- API endpoints reference
-- Database schema
-- Environment configuration
+client.close();
+```
 
-### Frontend Dashboard
+---
 
-See [dashboard/](dashboard/) for:
-- React component structure
-- Routing setup
-- API client usage
-
-### JavaScript SDK
-
-See [sdk/README.md](sdk/README.md) for:
-- Installation instructions
-- API reference
-- Integration examples
-
-## 🔧 Development
-
-### Project Structure
+## 🗂️ Project Structure
 
 ```
-Feature Flag/
-├── server/              # Backend API (Node.js + Express)
+feature-flag-platform/
+├── server/                 # Backend API
 │   ├── src/
-│   │   ├── routes/      # API route handlers
-│   │   ├── services/    # Business logic (cache, evaluator)
-│   │   ├── config/      # Database & Redis config
-│   │   └── utils/       # Utilities (hashing)
-│   └── prisma/          # Database schema
-├── dashboard/           # Frontend UI (React + Vite)
+│   │   ├── controllers/    # Flag, Project, Auth controllers
+│   │   ├── services/       # Evaluator, Cache, Audit logging
+│   │   ├── routes/         # REST API routes
+│   │   ├── middleware/     # Auth middleware (JWT)
+│   │   └── config/        # Database & Redis config
+│   └── prisma/            # Schema & migrations
+├── dashboard/             # Frontend (React + Vite)
 │   └── src/
-│       ├── pages/       # Page components
-│       ├── components/  # Reusable components
-│       └── api/         # API client
-└── sdk/                 # JavaScript SDK
-    └── src/
-        └── index.ts     # SDK implementation
+│       ├── pages/         # Dashboard, Analytics, AuditLog, SDK, Settings
+│       ├── components/    # Sidebar, CommandBar, Layout
+│       ├── services/      # API client
+│       └── context/       # Auth context
+├── sdk-node/              # Published Node.js SDK
+│   └── src/
+│       └── FlagForgeClient.ts
+└── demo-app/              # Example integration
 ```
 
-### Running Tests
-
-```bash
-# Backend tests (when implemented)
-cd server
-npm test
-
-# Frontend tests (when implemented)
-cd dashboard
-npm test
-```
-
-## 🌐 Production Deployment
-
-### Backend
-
-1. **Build:**
-   ```bash
-   cd server
-   npm run build
-   ```
-
-2. **Deploy to your platform** (Heroku, AWS, DigitalOcean, etc.)
-   - Set environment variables
-   - Run `npm run prisma:deploy` for migrations
-   - Start with `npm start`
-
-### Dashboard
-
-1. **Build:**
-   ```bash
-   cd dashboard
-   npm run build
-   ```
-
-2. **Deploy `dist/` folder** to:
-   - Vercel
-   - Netlify
-   - AWS S3 + CloudFront
-   - Any static hosting
-
-3. **Set environment variable:**
-   ```env
-   VITE_API_URL=https://your-api-domain.com
-   ```
-
-### Database & Redis
-
-- **PostgreSQL**: Use managed service (RDS, DigitalOcean, Supabase)
-- **Redis**: Use managed service (Redis Cloud, Upstash, AWS ElastiCache)
+---
 
 ## 🎓 How It Works
 
 ### Deterministic Flag Evaluation
 
-FlagForge uses **MD5 hashing** to consistently assign users to flag variations:
+FlagForge uses **MurmurHash-style hashing** for consistent variant assignment:
 
 ```
-1. Concatenate: seed = userId + ":" + flagKey
-2. Hash: hash = md5(seed)
-3. Normalize: score = parseInt(hash.substring(0, 8), 16) % 100
-4. Compare: if score < rolloutPercentage → ENABLED
+1. seed = userId + ":" + flagKey
+2. hash = murmurHash(seed)
+3. bucket = hash % 100
+4. if bucket < rolloutPercentage → ENABLED
 ```
 
-This ensures:
-- ✅ Same user always gets same result
-- ✅ Stateless evaluation (no session tracking)
-- ✅ Predictable distribution
+**Guarantees:** Same user always gets the same result. No database lookups at evaluation time. Works offline.
 
 ### Evaluation Priority
 
-1. **Kill Switch** - If flag.status = false, return OFF
-2. **Blocked Users** - If user in blocklist, return OFF
-3. **Whitelisted Users** - If user in allowlist, return ON
-4. **Percentage Rollout** - Hash-based evaluation
+```
+1. Kill Switch OFF    →  return false
+2. User in Blocklist  →  return false
+3. User in Allowlist  →  return true
+4. Percentage Rollout →  hash-based bucketing
+```
 
 ### Caching Strategy
 
 - **Redis TTL**: 5 minutes
-- **Cache Invalidation**: On flag update/delete
-- **Fallback**: Fetch from PostgreSQL on cache miss
+- **Auto-invalidation**: on flag update/delete
+- **Fallback**: PostgreSQL on cache miss
 
-## 🛠️ Technology Stack
+---
 
-| Component | Technology |
-|-----------|------------|
-| Backend | Node.js + Express + TypeScript |
-| Database | PostgreSQL + Prisma ORM |
-| Cache | Redis (ioredis) |
-| Frontend | React + Vite + TypeScript |
-| Styling | Tailwind CSS v4 |
-| Icons | Lucide React |
-| SDK | TypeScript (compiles to CommonJS) |
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Node.js · Express · TypeScript |
+| **Database** | PostgreSQL · Prisma ORM |
+| **Cache** | Redis (ioredis) |
+| **Frontend** | React 18 · Vite · TypeScript |
+| **Styling** | Tailwind CSS v4 |
+| **Icons** | Lucide React |
+| **Auth** | JWT (bcrypt + jsonwebtoken) |
+| **SDK** | TypeScript → CommonJS (npm published) |
+| **Animations** | Framer Motion |
+
+---
 
 ## 📈 Roadmap
 
 - [x] Core flag evaluation engine
-- [x] REST API
-- [x] Dashboard UI
-- [x] JavaScript SDK
-- [ ] Metrics & Analytics
-- [ ] Audit logs
-- [ ] Environment support (dev/staging/prod)
-- [ ] WebSocket real-time updates
-- [ ] Advanced targeting (user attributes, segments)
-- [ ] Scheduled rollouts
-
-## 📝 License
-
-MIT
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+- [x] REST API with JWT auth
+- [x] Premium dashboard UI (Linear-inspired dark theme)
+- [x] Boolean & Multivariate flags
+- [x] Real-time analytics with trend graphs
+- [x] Audit logs with before/after diffs
+- [x] Command palette (⌘K)
+- [x] Published Node.js SDK on npm
+- [x] Multi-environment support (Dev/Staging/Prod)
+- [ ] Environment promotion (copy flags between envs)
+- [ ] WebSocket real-time flag updates
+- [ ] Team roles & collaboration
+- [ ] Scheduled flag rollouts
+- [ ] Advanced targeting (user attributes & segments)
 
 ---
 
-**Built with ❤️ for safer feature releases**
+## 📝 License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**Built with ⚡ for safer, faster feature releases**
+
+[Dashboard](http://localhost:5173) · [SDK on npm](https://www.npmjs.com/package/flagforge-node-sdk) · [Report Bug](https://github.com/aditi3175/feature-flag-platform/issues)
+
+</div>

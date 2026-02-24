@@ -6,6 +6,7 @@ import apiRoutes from './routes/api';
 import sdkRoutes from './routes/sdk';
 import evaluateRoutes from './routes/evaluate'; // Legacy endpoint
 import analyticsRoutes from './routes/analytics.routes';
+import auditRoutes from './routes/auditRoutes';
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use('/api', apiRoutes); // Unified API routes (projects + flags)
 app.use('/api/v1/sdk', sdkRoutes); // SDK specific routes
 app.use('/api/evaluate', evaluateRoutes); // Legacy evaluate endpoint (backward compatibility)
 app.use('/api/analytics', analyticsRoutes); // Analytics and stats
+app.use('/api', auditRoutes); // Audit logs
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2, Flag, AlertTriangle, Shield, Check, Info } from 'lucide-react';
+import { X, Loader2, Flag, AlertTriangle, Shield, Check, Info, Plus, Trash2, Split } from 'lucide-react';
 
 interface CreateFlagModalProps {
   isOpen: boolean;
@@ -8,16 +8,27 @@ interface CreateFlagModalProps {
   initialData?: FlagFormData | null;
 }
 
+export interface Variant {
+  id: string;
+  name: string;
+  value: string; // Keep as string for simple input, parse if needed
+  rolloutPercentage: number;
+}
+
 export interface FlagFormData {
   id?: string;
   key: string;
   description: string;
   environment: string;
+  type: 'BOOLEAN' | 'MULTIVARIATE';
   status: boolean;
   rolloutPercentage: number;
   targetingRules: {
     allowedUsers: string[];
   };
+  variants: Variant[];
+  defaultVariantId?: string;
+  offVariantId?: string;
 }
 
 export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData }: CreateFlagModalProps) {
@@ -25,25 +36,42 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
     key: '',
     description: '',
     environment: 'Production',
+    type: 'BOOLEAN',
     status: true,
     rolloutPercentage: 100,
     targetingRules: {
       allowedUsers: []
-    }
+    },
+    variants: [],
+    defaultVariantId: '',
+    offVariantId: ''
   });
 
   // Load initial data when modal opens or initialData changes
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData({
+        ...initialData,
+        type: initialData.type || 'BOOLEAN',
+        variants: initialData.variants || [],
+        defaultVariantId: initialData.defaultVariantId || '',
+        offVariantId: initialData.offVariantId || ''
+      });
     } else {
       setFormData({
         key: '',
         description: '',
         environment: 'Production',
+        type: 'BOOLEAN',
         status: true,
         rolloutPercentage: 100,
-        targetingRules: { allowedUsers: [] }
+        targetingRules: { allowedUsers: [] },
+        variants: [
+          { id: 'control', name: 'Control', value: 'control', rolloutPercentage: 50 },
+          { id: 'treatment', name: 'Treatment', value: 'treatment', rolloutPercentage: 50 },
+        ],
+        defaultVariantId: 'control',
+        offVariantId: 'control'
       });
     }
   }, [initialData, isOpen]);
@@ -67,20 +95,25 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
       return;
     }
 
+    // Validate Variants
+    if (formData.type === 'MULTIVARIATE') {
+      const totalRollout = formData.variants.reduce((sum, v) => sum + v.rolloutPercentage, 0);
+      if (totalRollout !== 100) {
+        setError(`Variant rollout percentages must sum to 100% (Current: ${totalRollout}%)`);
+        return;
+      }
+      if (formData.variants.some(v => !v.id || !v.value)) {
+        setError('All variants must have an ID and Value');
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       setError(null);
       await onSubmit(formData);
       onClose();
-      // Reset form
-      setFormData({
-        key: '',
-        description: '',
-        environment: 'Production',
-        status: true,
-        rolloutPercentage: 100,
-        targetingRules: { allowedUsers: [] }
-      });
+      // Reset form handled by useEffect
       setTargetingInput('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create flag');
@@ -110,6 +143,32 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
         allowedUsers: prev.targetingRules.allowedUsers.filter(u => u !== userToRemove)
       }
     }));
+  };
+
+  // Variant Helpers
+  const addVariant = () => {
+    setFormData(prev => ({
+      ...prev,
+      variants: [
+        ...prev.variants,
+        { id: '', name: '', value: '', rolloutPercentage: 0 }
+      ]
+    }));
+  };
+
+  const removeVariant = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      variants: prev.variants.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateVariant = (index: number, field: keyof Variant, value: any) => {
+    setFormData(prev => {
+      const newVariants = [...prev.variants];
+      newVariants[index] = { ...newVariants[index], [field]: value };
+      return { ...prev, variants: newVariants };
+    });
   };
 
   return (
@@ -148,28 +207,17 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
                   value={formData.key}
                   disabled={!!initialData}
                   onChange={(e) => {
-                    // Auto-slugify: lowercase, spaces to hyphens, remove special chars
                     const val = e.target.value
                       .toLowerCase()
-                      .replace(/\s+/g, '-')     // Spaces to hyphens
-                      .replace(/[^a-z0-9-]/g, ''); // Remove non-alphanumeric (except hyphen)
+                      .replace(/\s+/g, '-')
+                      .replace(/[^a-z0-9-]/g, '');
                     
                     setFormData({ ...formData, key: val });
                     setError(null);
                   }}
-                  placeholder="e.g. new-checkout-flow"
+                  placeholder="e.g. new-feature-v1"
                   className={`w-full px-3 py-2 rounded-lg bento-surface border-white/5 focus:outline-none focus:border-[#f59e0b]/30 font-mono text-xs transition-all text-white placeholder-gray-600 ${initialData ? 'cursor-not-allowed opacity-50' : ''}`}
                 />
-                <div className="flex justify-between mt-1">
-                  <p className="text-[10px] text-gray-600">
-                    Unique key (lowercase, numbers, hyphens only)
-                  </p>
-                  {formData.key && (
-                    <p className="text-[10px] font-mono text-[#f59e0b]">
-                      isEnabled('{formData.key}')
-                    </p>
-                  )}
-                </div>
               </div>
 
               <div>
@@ -198,54 +246,173 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
             </div>
           </section>
 
-          {/* 2. Status & Rollout */}
+          {/* 2. Flag Type */}
           <section className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
-              <Shield className="w-3.5 h-3.5" strokeWidth={2} /> Status & Rollout
+             <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
+              <Split className="w-3.5 h-3.5" strokeWidth={2} /> Flag Type
             </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bento-surface border border-white/5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-400">Feature Status</label>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, status: !formData.status })}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      formData.status ? 'bg-emerald-500' : 'bg-gray-700'
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                      formData.status ? 'translate-x-5' : 'translate-x-0.5'
-                    }`}/>
-                  </button>
-                </div>
-                <p className="text-[10px] text-gray-600">
-                  {formData.status ? 'Enabled - Users will see this feature' : 'Disabled - Feature is hidden'}
-                </p>
-              </div>
-
-              <div className="p-3 rounded-lg bento-surface border border-white/5">
-                <label className="text-xs font-medium mb-1.5 block text-gray-400">
-                  Rollout: {formData.rolloutPercentage}%
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={formData.rolloutPercentage}
-                  onChange={(e) => setFormData({ ...formData, rolloutPercentage: parseInt(e.target.value) })}
-                  className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#f59e0b]"
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="flagType"
+                  checked={formData.type === 'BOOLEAN'}
+                  onChange={() => setFormData({ ...formData, type: 'BOOLEAN' })}
+                  className="accent-[#f59e0b]"
                 />
-                <p className="text-[10px] text-gray-600 mt-1">
-                  {formData.rolloutPercentage}% of users will see this feature
-                </p>
-              </div>
+                <span className="text-sm text-gray-300">Boolean (On/Off)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="radio" 
+                  name="flagType"
+                  checked={formData.type === 'MULTIVARIATE'}
+                  onChange={() => setFormData({ ...formData, type: 'MULTIVARIATE' })}
+                  className="accent-[#f59e0b]"
+                />
+                <span className="text-sm text-gray-300">Multivariate (A/B Testing)</span>
+              </label>
             </div>
           </section>
 
-          {/* 3. Targeting Rules */}
+          {/* 3. Status & Rollout (Conditional based on Type) */}
+          {formData.type === 'BOOLEAN' ? (
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
+                <Shield className="w-3.5 h-3.5" strokeWidth={2} /> Status & Rollout
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bento-surface border border-white/5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-gray-400">Feature Status</label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, status: !formData.status })}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                        formData.status ? 'bg-emerald-500' : 'bg-gray-700'
+                      }`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        formData.status ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}/>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-600">
+                    {formData.status ? 'Enabled - Users will see this feature' : 'Disabled - Feature is hidden'}
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-lg bento-surface border border-white/5">
+                  <label className="text-xs font-medium mb-1.5 block text-gray-400">
+                    Rollout: {formData.rolloutPercentage}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={formData.rolloutPercentage}
+                    onChange={(e) => setFormData({ ...formData, rolloutPercentage: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-white/5 rounded-full appearance-none cursor-pointer accent-[#f59e0b]"
+                  />
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    {formData.rolloutPercentage}% of users will see this feature
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center justify-between text-[#f59e0b]">
+                <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" strokeWidth={2} /> Variants</span>
+                <span className="text-[10px] bg-[#f59e0b]/10 px-2 py-0.5 rounded text-[#f59e0b]">Must sum to 100%</span>
+              </h3>
+
+              <div className="space-y-2">
+                {formData.variants.map((variant, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white/5 p-2 rounded-lg">
+                    <div className="col-span-3">
+                      <input 
+                        placeholder="ID"
+                        value={variant.id}
+                        onChange={(e) => updateVariant(idx, 'id', e.target.value)}
+                        className="w-full bg-transparent border-b border-white/10 text-xs text-white focus:outline-none focus:border-[#f59e0b]"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                       <input 
+                        placeholder="Name"
+                        value={variant.name}
+                        onChange={(e) => updateVariant(idx, 'name', e.target.value)}
+                        className="w-full bg-transparent border-b border-white/10 text-xs text-white focus:outline-none focus:border-[#f59e0b]"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                        <input 
+                        placeholder="Value"
+                        value={variant.value}
+                        onChange={(e) => updateVariant(idx, 'value', e.target.value)}
+                        className="w-full bg-transparent border-b border-white/10 text-xs text-white focus:outline-none focus:border-[#f59e0b]"
+                      />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-1">
+                       <input 
+                        type="number"
+                        value={variant.rolloutPercentage}
+                        onChange={(e) => updateVariant(idx, 'rolloutPercentage', parseInt(e.target.value) || 0)}
+                        className="w-full bg-transparent border-b border-white/10 text-xs text-white focus:outline-none focus:border-[#f59e0b] text-right"
+                      />
+                      <span className="text-xs text-gray-500">%</span>
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <button type="button" onClick={() => removeVariant(idx)} className="text-gray-500 hover:text-red-400">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button 
+                  type="button" 
+                  onClick={addVariant}
+                  className="w-full py-2 border border-dashed border-white/10 rounded-lg text-xs text-gray-400 hover:bg-white/5 hover:text-white transition-colors flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Variant
+                </button>
+              </div>
+
+               <div className="grid grid-cols-2 gap-3 mt-4">
+                 <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-400">Default Variant (On)</label>
+                    <select
+                      value={formData.defaultVariantId}
+                      onChange={(e) => setFormData({ ...formData, defaultVariantId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bento-surface border-white/5 text-white text-xs"
+                    >
+                      <option value="">Select Variant...</option>
+                      {formData.variants.map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.id})</option>
+                      ))}
+                    </select>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-medium mb-1 text-gray-400">Off Variant</label>
+                    <select
+                      value={formData.offVariantId}
+                      onChange={(e) => setFormData({ ...formData, offVariantId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg bento-surface border-white/5 text-white text-xs"
+                    >
+                      <option value="">Select Variant...</option>
+                       {formData.variants.map(v => (
+                        <option key={v.id} value={v.id}>{v.name} ({v.id})</option>
+                      ))}
+                    </select>
+                 </div>
+               </div>
+            </section>
+          )}
+
+          {/* 4. Targeting Rules */}
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#f59e0b]">
               <Info className="w-3.5 h-3.5" strokeWidth={2} /> User Targeting (Optional)
@@ -291,7 +458,7 @@ export default function CreateFlagModal({ isOpen, onClose, onSubmit, initialData
                         onClick={() => removeTargetUser(user)}
                         className="hover:text-white transition-colors"
                       >
-                        <X className="w-3 h-3" strokeWidth={2} />
+                       <X className="w-3 h-3" strokeWidth={2} />
                       </button>
                     </div>
                   ))}

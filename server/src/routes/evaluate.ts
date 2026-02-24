@@ -49,9 +49,13 @@ router.post('/', async (req: Request, res: Response) => {
     const result = evaluateFlag(
       {
         key: flag.key,
+        type: flag.type,
         status: flag.status,
         rolloutPercentage: flag.rolloutPercentage,
         targetingRules: flag.targetingRules as any,
+        variants: flag.variants as any,
+        defaultVariantId: flag.defaultVariantId,
+        offVariantId: flag.offVariantId
       },
       userId
     );

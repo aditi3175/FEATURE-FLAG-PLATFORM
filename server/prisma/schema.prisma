@@ -19,6 +19,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
   
   projects  Project[]
+  auditLogs AuditLog[]
 
   @@map("users")
 }
@@ -32,9 +33,15 @@ model Project {
   
   flags     Flag[]
   evaluationEvents EvaluationEvent[]
+  auditLogs AuditLog[]
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("projects")
+}
+
+enum FlagType {
+  BOOLEAN
+  MULTIVARIATE
 }
 
 model Flag {
@@ -42,10 +49,14 @@ model Flag {
   projectId         String   @map("project_id")
   key               String
   description       String   @default("")
+  type              FlagType @default(BOOLEAN)
   status            Boolean  @default(true)  // Global kill switch
   rolloutPercentage Int      @default(0) @map("rollout_percentage")
   environment       String   @default("Production") // Dev, Staging, Production
-  targetingRules    Json     @default("{}") @map("targeting_rules")  // { "allowed_users": ["user1"] }
+  targetingRules    Json     @default("{}") @map("targeting_rules")
+  variants          Json     @default("[]") // Array of Variant objects
+  defaultVariantId  String?  @map("default_variant_id")
+  offVariantId      String?  @map("off_variant_id")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -70,3 +81,22 @@ model EvaluationEvent {
   @@index([projectId, timestamp])
   @@map("evaluation_events")
 }
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  userId      String   @map("user_id")
+  action      String   // "flag.created" | "flag.updated" | "flag.deleted" | "flag.toggled"
+  entityType  String   @default("flag") @map("entity_type")
+  entityId    String   @map("entity_id")
+  entityName  String   @map("entity_name")
+  changes     Json     @default("{}") // { before: {...}, after: {...} }
+  timestamp   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, timestamp])
+  @@map("audit_logs")
+}
+

@@ -1,0 +1,25 @@
+{
+  "name": "flagforge-node-sdk",
+  "version": "0.1.1",
+  "description": "Node.js Server-Side SDK for FlagForge",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "feature-flags",
+    "flagforge",
+    "node-sdk"
+  ],
+  "author": "FlagForge Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}

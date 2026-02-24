@@ -41,8 +41,11 @@ const Analytics = () => {
     try {
       const data = await ProjectAPI.getProjects();
       setProjects(data);
-      if (data.length > 0) setSelectedProjectId(data[0].id);
-      else setLoading(false);
+      if (data.length > 0) {
+        const saved = localStorage.getItem('selectedProjectId');
+        const match = saved && data.find((p: any) => p.id === saved);
+        setSelectedProjectId(match ? saved : data[0].id);
+      } else setLoading(false);
     } catch (err) {
       console.error('Failed to fetch projects', err);
       setLoading(false);
@@ -109,7 +112,7 @@ const Analytics = () => {
         <div className="flex gap-2">
           <select 
             value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
+            onChange={(e) => { setSelectedProjectId(e.target.value); localStorage.setItem('selectedProjectId', e.target.value); }}
             className="px-3 py-2 rounded-lg bento-surface text-xs text-white focus:outline-none focus:border-white/10"
           >
             {projects.map(p => (

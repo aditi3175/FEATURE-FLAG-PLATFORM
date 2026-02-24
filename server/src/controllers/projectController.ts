@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../config/database';
+import { logAudit, computeChanges } from '../services/auditService';
 
 /**
  * Generate a cryptographically secure API key
@@ -36,6 +37,17 @@ export async function createProject(req: Request, res: Response): Promise<void> 
         apiKey,
         userId: req.user.userId,
       },
+    });
+
+    // Audit log
+    logAudit({
+      projectId: project.id,
+      userId: req.user.userId,
+      action: 'project.created',
+      entityType: 'project',
+      entityId: project.id,
+      entityName: project.name,
+      changes: { after: { name: project.name } },
     });
 
     res.status(201).json(project);
@@ -158,6 +170,17 @@ export async function updateProject(req: Request, res: Response): Promise<void> 
       },
     });
 
+    // Audit log
+    logAudit({
+      projectId: updatedProject.id,
+      userId: req.user.userId,
+      action: 'project.updated',
+      entityType: 'project',
+      entityId: updatedProject.id,
+      entityName: updatedProject.name,
+      changes: { name: { from: existingProject.name, to: updatedProject.name } },
+    });
+
     res.json(updatedProject);
   } catch (error) {
     console.error('Error updating project:', error);
@@ -192,6 +215,17 @@ export async function deleteProject(req: Request, res: Response): Promise<void> 
       res.status(403).json({ error: 'Access denied' });
       return;
     }
+
+    // Audit log — must log before delete (cascade removes related data)
+    logAudit({
+      projectId: project.id,
+      userId: req.user.userId,
+      action: 'project.deleted',
+      entityType: 'project',
+      entityId: project.id,
+      entityName: project.name,
+      changes: { before: { name: project.name } },
+    });
 
     await prisma.project.delete({
       where: { id: projectId },
