@@ -23,5 +23,6 @@ router.post('/projects/:projectId/flags', authMiddleware, flagController.createF
 router.get('/flags/:flagId', authMiddleware, flagController.getFlagById);
 router.patch('/flags/:flagId', authMiddleware, flagController.updateFlag);
 router.delete('/flags/:flagId', authMiddleware, flagController.deleteFlag);
+router.post('/flags/:flagId/promote', authMiddleware, flagController.promoteFlag);
 
 export default router;

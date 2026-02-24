@@ -40,6 +40,7 @@ const ACTION_CONFIG: Record<string, { icon: any; label: string; color: string; b
   'flag.updated': { icon: Pencil, label: 'Flag Updated', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
   'flag.deleted': { icon: Trash2, label: 'Flag Deleted', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
   'flag.toggled': { icon: ToggleLeft, label: 'Flag Toggled', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+  'flag.promoted': { icon: Plus, label: 'Flag Promoted', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
   'project.created': { icon: Plus, label: 'Project Created', color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   'project.updated': { icon: Pencil, label: 'Project Updated', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
   'project.deleted': { icon: Trash2, label: 'Project Deleted', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
@@ -221,6 +222,7 @@ export default function AuditLog() {
             <option value="flag.created" className="bg-[#1a1a1a]">Flag Created</option>
             <option value="flag.updated" className="bg-[#1a1a1a]">Flag Updated</option>
             <option value="flag.toggled" className="bg-[#1a1a1a]">Flag Toggled</option>
+            <option value="flag.promoted" className="bg-[#1a1a1a]">Flag Promoted</option>
             <option value="flag.deleted" className="bg-[#1a1a1a]">Flag Deleted</option>
             <option value="project.created" className="bg-[#1a1a1a]">Project Created</option>
             <option value="project.updated" className="bg-[#1a1a1a]">Project Updated</option>

@@ -323,3 +323,112 @@ export async function getFlagById(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Failed to fetch flag' });
   }
 }
+
+/**
+ * Promote a flag to a different environment
+ * POST /api/flags/:flagId/promote
+ */
+export async function promoteFlag(req: Request, res: Response): Promise<void> {
+  try {
+    const flagId = req.params.flagId as string;
+    const { targetEnvironment } = req.body;
+
+    const validEnvs = ['Development', 'Staging', 'Production'];
+    if (!targetEnvironment || !validEnvs.includes(targetEnvironment)) {
+      res.status(400).json({ error: 'Invalid target environment. Must be Development, Staging, or Production.' });
+      return;
+    }
+
+    // Get the source flag
+    const sourceFlag = await prisma.flag.findUnique({
+      where: { id: flagId },
+      include: { project: true },
+    });
+
+    if (!sourceFlag) {
+      res.status(404).json({ error: 'Flag not found' });
+      return;
+    }
+
+    // Verify ownership
+    if (req.user && sourceFlag.project.userId !== req.user.userId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    if (sourceFlag.environment === targetEnvironment) {
+      res.status(400).json({ error: 'Flag is already in this environment' });
+      return;
+    }
+
+    // Check if this flag key already exists in the target env
+    const existingFlag = await prisma.flag.findUnique({
+      where: {
+        projectId_key_environment: {
+          projectId: sourceFlag.projectId,
+          key: sourceFlag.key,
+          environment: targetEnvironment,
+        },
+      },
+    });
+
+    let promotedFlag;
+    if (existingFlag) {
+      // Update existing flag in target env
+      promotedFlag = await prisma.flag.update({
+        where: { id: existingFlag.id },
+        data: {
+          description: sourceFlag.description,
+          type: sourceFlag.type,
+          status: sourceFlag.status,
+          rolloutPercentage: sourceFlag.rolloutPercentage,
+          targetingRules: sourceFlag.targetingRules as any,
+          variants: sourceFlag.variants as any,
+          defaultVariantId: sourceFlag.defaultVariantId,
+          offVariantId: sourceFlag.offVariantId,
+        },
+      });
+    } else {
+      // Create new flag in target env
+      promotedFlag = await prisma.flag.create({
+        data: {
+          projectId: sourceFlag.projectId,
+          key: sourceFlag.key,
+          description: sourceFlag.description,
+          type: sourceFlag.type,
+          status: sourceFlag.status,
+          rolloutPercentage: sourceFlag.rolloutPercentage,
+          environment: targetEnvironment,
+          targetingRules: sourceFlag.targetingRules as any,
+          variants: sourceFlag.variants as any,
+          defaultVariantId: sourceFlag.defaultVariantId,
+          offVariantId: sourceFlag.offVariantId,
+        },
+      });
+    }
+
+    // Audit log
+    logAudit({
+      projectId: sourceFlag.projectId,
+      userId: req.user?.userId || '',
+      action: 'flag.promoted',
+      entityType: 'flag',
+      entityId: promotedFlag.id,
+      entityName: promotedFlag.key,
+      changes: {
+        from: sourceFlag.environment,
+        to: targetEnvironment,
+        existed: !!existingFlag,
+      },
+    });
+
+    res.json({
+      message: `Flag "${sourceFlag.key}" promoted from ${sourceFlag.environment} → ${targetEnvironment}`,
+      flag: promotedFlag,
+    });
+  } catch (error) {
+    console.error('Error promoting flag:', error);
+    res.status(500).json({ error: 'Failed to promote flag' });
+  }
+}
+

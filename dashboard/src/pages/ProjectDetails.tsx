@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Flag, Plus, ArrowLeft, Search, MoreVertical, Loader2, Edit2, Trash2 } from 'lucide-react';
+import { Flag, Plus, ArrowLeft, Search, MoreVertical, Loader2, Edit2, Trash2, ArrowUpRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ProtectedPage from '../components/ProtectedPage';
 import CreateFlagModal from '../components/CreateFlagModal';
@@ -43,6 +43,8 @@ export default function ProjectDetails() {
   const [editingFlag, setEditingFlag] = useState<FlagType | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [deletingFlag, setDeletingFlag] = useState<FlagType | null>(null);
+  const [promotingFlag, setPromotingFlag] = useState<FlagType | null>(null);
+  const [promoteTarget, setPromoteTarget] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Mock sparkline data
@@ -114,6 +116,18 @@ export default function ProjectDetails() {
   const toggleMenu = (flagId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setOpenMenuId(openMenuId === flagId ? null : flagId);
+  };
+
+  const handlePromoteFlag = async () => {
+    if (!promotingFlag || !promoteTarget) return;
+    try {
+      await FlagAPI.promoteFlag(promotingFlag.id, promoteTarget);
+      setPromotingFlag(null);
+      setPromoteTarget('');
+      fetchProjectData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to promote flag');
+    }
   };
 
   const filteredFlags = flags.filter(flag => {
@@ -281,6 +295,18 @@ export default function ProjectDetails() {
                               </button>
                               <button
                                 onClick={() => {
+                                  const envs = ['Development', 'Staging', 'Production'].filter(e => e !== flag.environment);
+                                  setPromotingFlag(flag);
+                                  setPromoteTarget(envs[0]);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-amber-400 hover:bg-amber-500/10 transition-colors border-t border-white/5"
+                              >
+                                <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+                                <span>Promote</span>
+                              </button>
+                              <button
+                                onClick={() => {
                                   setDeletingFlag(flag);
                                   setOpenMenuId(null);
                                 }}
@@ -351,6 +377,71 @@ export default function ProjectDetails() {
         onConfirm={handleDeleteFlag}
         flagKey={deletingFlag?.key || ''}
       />
+
+      {/* Promote Flag Modal */}
+      <AnimatePresence>
+        {promotingFlag && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+            onClick={() => setPromotingFlag(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bento-surface border border-white/10 rounded-xl p-6 w-full max-w-sm shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <ArrowUpRight className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Promote Flag</h3>
+                  <p className="text-xs text-gray-500">Copy configuration to another environment</p>
+                </div>
+              </div>
+
+              <div className="mb-4 p-3 rounded-lg bg-white/[0.03] border border-white/5">
+                <p className="text-xs text-gray-400 mb-1">Flag</p>
+                <p className="text-sm text-white font-mono">{promotingFlag.key}</p>
+                <p className="text-xs text-gray-500 mt-1">Currently in <span className="text-amber-400">{promotingFlag.environment}</span></p>
+              </div>
+
+              <label className="block text-xs text-gray-400 mb-2">Promote to</label>
+              <select
+                value={promoteTarget}
+                onChange={(e) => setPromoteTarget(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 text-white text-sm rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+              >
+                {['Development', 'Staging', 'Production']
+                  .filter(e => e !== promotingFlag.environment)
+                  .map(env => (
+                    <option key={env} value={env} className="bg-[#1a1a1a]">{env}</option>
+                  ))}
+              </select>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPromotingFlag(null)}
+                  className="flex-1 px-4 py-2 rounded-lg text-xs text-gray-400 hover:bg-white/5 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePromoteFlag}
+                  className="flex-1 px-4 py-2 rounded-lg text-xs font-medium accent-gold text-white hover:opacity-90 transition-all"
+                >
+                  Promote →
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </ProtectedPage>
   );
 }

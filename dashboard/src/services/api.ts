@@ -237,6 +237,24 @@ export const FlagAPI = {
       throw new Error('Failed to delete flag');
     }
   },
+
+  async promoteFlag(id: string, targetEnvironment: string): Promise<any> {
+    const response = await fetch(`${API_BASE_URL}/api/flags/${id}/promote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...TokenService.getAuthHeader(),
+      },
+      body: JSON.stringify({ targetEnvironment }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to promote flag');
+    }
+
+    return response.json();
+  },
 };
 
 // Analytics API
