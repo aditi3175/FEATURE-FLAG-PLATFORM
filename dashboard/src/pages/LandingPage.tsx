@@ -106,7 +106,7 @@ const Hero = () => {
           
           <button 
             onClick={() => {
-              navigator.clipboard.writeText('npm install flagforge');
+              navigator.clipboard.writeText('npm install flagforge-node-sdk');
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
@@ -117,7 +117,7 @@ const Hero = () => {
             ) : (
               <Terminal className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
             )}
-            <span>{copied ? 'Copied!' : 'npm install flagforge'}</span>
+            <span>{copied ? 'Copied!' : 'npm install flagforge-node-sdk'}</span>
             
             {/* Toast/Tooltip Effect */}
             {copied && (
