@@ -33,6 +33,17 @@ app.get("/health", (_req, res) => {
   res.json({ status: "OK" });
 });
 
+// Database health check (for debugging)
+app.get("/health/db", async (_req, res) => {
+  try {
+    const prisma = (await import('./config/database')).default;
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "OK", database: "connected" });
+  } catch (error: any) {
+    res.status(500).json({ status: "ERROR", database: "disconnected", error: error.message });
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api', apiRoutes); // Unified API routes (projects + flags)
