@@ -10,7 +10,7 @@ const router = Router();
  */
 router.get('/projects/:projectId/audit-logs', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { projectId } = req.params;
+    const projectId = req.params.projectId as string;
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const action = req.query.action as string | undefined;
