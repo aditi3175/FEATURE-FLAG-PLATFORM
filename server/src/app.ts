@@ -38,7 +38,20 @@ app.get("/health/db", async (_req, res) => {
   try {
     const prisma = (await import('./config/database')).default;
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "OK", database: "connected" });
+    
+    // Check if tables exist
+    const tables: any[] = await prisma.$queryRaw`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
+    const tableNames = tables.map((t: any) => t.tablename);
+    
+    // Try to count users
+    let userCount = -1;
+    try {
+      userCount = await prisma.user.count();
+    } catch (e: any) {
+      return res.status(500).json({ status: "ERROR", database: "connected", tables: tableNames, modelError: e.message });
+    }
+    
+    res.json({ status: "OK", database: "connected", tables: tableNames, userCount });
   } catch (error: any) {
     res.status(500).json({ status: "ERROR", database: "disconnected", error: error.message });
   }
