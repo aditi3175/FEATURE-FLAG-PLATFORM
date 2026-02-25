@@ -12,7 +12,7 @@ interface AuthButtonProps {
 }
 
 export default function AuthButton({ className, children, mode = 'login' }: AuthButtonProps) {
-  const { isAuthenticated, user, login, signup, logout, error: authError } = useAuth();
+  const { isAuthenticated, user, login, signup, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>(mode);
   const [name, setName] = useState('');

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TokenService } from '../services/api';
 import {
   ClipboardList,
@@ -68,7 +67,6 @@ export default function AuditLog() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   // Fetch projects
   useEffect(() => {

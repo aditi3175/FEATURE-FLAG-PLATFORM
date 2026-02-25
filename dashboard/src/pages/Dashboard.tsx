@@ -83,7 +83,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleCreateProject = async (name: string, description: string) => {
+  const handleCreateProject = async (name: string, _description: string) => {
     try {
       await ProjectAPI.createProject(name);
       await fetchProjects(); // Refresh with flag count
