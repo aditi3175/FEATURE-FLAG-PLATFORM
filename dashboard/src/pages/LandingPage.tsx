@@ -286,9 +286,9 @@ const Features = () => {
                 {card.description}
               </p>
               
-              <div className="mt-6 flex items-center text-sm font-medium text-gray-500 group-hover:text-white transition-colors cursor-pointer">
+              <Link to="/docs" className="mt-6 flex items-center text-sm font-medium text-gray-500 group-hover:text-white transition-colors">
                 Learn more <ChevronRight className="w-4 h-4 ml-1" />
-              </div>
+              </Link>
             </motion.div>
           ))}
         </div>
