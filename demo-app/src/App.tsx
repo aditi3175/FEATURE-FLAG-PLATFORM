@@ -9,7 +9,7 @@ import {
   Sun,
   X
 } from 'lucide-react';
-import { FlagForgeProvider, useFlag, useFlagForgeLoading } from '../../sdk/src/react';
+import { FlagForgeProvider, useFlag, useVariant, useFlagForgeLoading } from '../../sdk/src/react';
 
 // API Key from environment variable (stored in .env file, not committed to git)
 // To set up: Copy .env.example to .env and add your API key from FlagForge Dashboard
@@ -24,6 +24,9 @@ function AppContent() {
   const showProPlan = useFlag('show-pro-plan', userId);
   const isBetaTester = useFlag('beta-tester', userId);
   const enableNewsletter = useFlag('enable-newsletter', userId);
+
+  // A/B Testing - Multivariate Flags
+  const buttonColor = useVariant('button-color', userId, 'default');
 
   // Local state for UI
   const [darkMode, setDarkMode] = useState(false);
@@ -113,6 +116,43 @@ function AppContent() {
             <button className={`px-8 py-4 rounded-xl font-semibold border transition-all ${darkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-[#d4c5b0] hover:bg-white'}`}>
               View Documentation
             </button>
+          </div>
+        </div>
+
+        {/* A/B Testing Section */}
+        <div className={`mb-16 p-8 rounded-2xl border ${darkMode ? 'bg-[#211b17] border-gray-800' : 'bg-white border-[#e5e5e0]'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">A/B Test</div>
+            <h3 className="text-lg font-bold">CTA Button Experiment</h3>
+          </div>
+          <p className={`text-sm mb-6 ${darkMode ? 'text-gray-400' : 'text-[#736a62]'}`}>
+            This button's style changes based on which variant the user is assigned to via the <code className="bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-xs">button-color</code> multivariate flag. Change the User ID in the debug panel to see different variants!
+          </p>
+          
+          <div className="flex items-center gap-6 flex-wrap">
+            {buttonColor === 'green' ? (
+              <button className="px-8 py-4 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20">
+                🟢 Get Started — Variant A
+              </button>
+            ) : buttonColor === 'purple' ? (
+              <button className="px-8 py-4 rounded-xl font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-all shadow-lg shadow-purple-600/20">
+                🟣 Get Started — Variant B
+              </button>
+            ) : buttonColor === 'orange' ? (
+              <button className="px-8 py-4 rounded-xl font-semibold text-white bg-orange-500 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20">
+                🟠 Get Started — Variant C
+              </button>
+            ) : (
+              <button className="px-8 py-4 rounded-xl font-semibold text-white bg-[#a67c52] hover:bg-[#956b47] transition-all">
+                Get Started — Default
+              </button>
+            )}
+
+            <div className={`text-xs font-mono ${darkMode ? 'text-gray-500' : 'text-[#999]'}`}>
+              <div>User: <span className="text-[#a67c52]">{userId}</span></div>
+              <div>Assigned: <span className={buttonColor !== 'default' ? 'text-purple-500 font-bold' : 'text-red-400'}>{buttonColor}</span></div>
+              <div className="mt-1 opacity-60">Flag: button-color (Multivariate)</div>
+            </div>
           </div>
         </div>
 
@@ -277,6 +317,12 @@ function AppContent() {
                     {enableNewsletter.toString()}
                   </span>
                 </div>
+                <div className="flex items-center justify-between text-xs font-mono bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20">
+                  <span className="opacity-80">button-color</span>
+                  <span className="text-purple-400">
+                    {buttonColor || 'default'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -289,7 +335,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <FlagForgeProvider apiKey={DEMO_API_KEY}>
+    <FlagForgeProvider apiKey={DEMO_API_KEY} apiUrl="https://flagforge-api.onrender.com">
       <AppContent />
     </FlagForgeProvider>
   );

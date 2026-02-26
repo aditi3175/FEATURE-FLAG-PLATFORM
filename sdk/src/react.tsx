@@ -161,6 +161,48 @@ export function useFlag(flagKey: string, userId: string): boolean {
 }
 
 /**
+ * Hook to get the variant value for a multivariate flag
+ * 
+ * @param flagKey - The key of the multivariate feature flag
+ * @param userId - The user identifier for targeted rollouts
+ * @param defaultValue - Default value if flag is not found
+ * @returns The variant value string
+ * 
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const buttonColor = useVariant('button-color', 'user-123', 'blue');
+ *   return <button style={{ background: buttonColor }}>Click me</button>;
+ * }
+ * ```
+ */
+export function useVariant(flagKey: string, userId: string, defaultValue: string = ''): string {
+  const { sdk, loading } = useFlagForgeContext();
+  const [variantValue, setVariantValue] = useState<string>(defaultValue);
+
+  useEffect(() => {
+    if (!sdk || loading) {
+      setVariantValue(defaultValue);
+      return;
+    }
+
+    // Get initial value
+    const initialValue = sdk.getVariant(flagKey, userId, defaultValue);
+    setVariantValue(initialValue);
+
+    // Subscribe to flag changes
+    const unsubscribe = sdk.subscribe(() => {
+      const newValue = sdk.getVariant(flagKey, userId, defaultValue);
+      setVariantValue(newValue);
+    });
+
+    return unsubscribe;
+  }, [sdk, loading, flagKey, userId, defaultValue]);
+
+  return variantValue;
+}
+
+/**
  * Hook to check if FlagForge is still loading
  * 
  * @example

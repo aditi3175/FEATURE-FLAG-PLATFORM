@@ -4,10 +4,20 @@ export interface FlagForgeConfig {
   pollingInterval?: number; // milliseconds, default: 60000 (1 minute)
 }
 
+export interface Variant {
+  id: string;
+  value: string;
+  weight: number;
+}
+
 export interface FlagData {
   key: string;
   status: boolean;
   rolloutPercentage: number;
+  type?: 'BOOLEAN' | 'MULTIVARIATE';
+  variants?: Variant[];
+  defaultVariantId?: string;
+  offVariantId?: string;
   targetingRules: {
     allowed_users?: string[];
     blocked_users?: string[];
@@ -17,6 +27,7 @@ export interface FlagData {
 export interface EvaluationResult {
   enabled: boolean;
   reason: string;
+  variant?: string;
 }
 
 /**
@@ -103,6 +114,32 @@ export class FlagForgeSDK {
   }
 
   /**
+   * Get the variant value for a multivariate flag
+   * Returns the variant value string, or the defaultValue if flag is not found/disabled
+   */
+  getVariant(flagKey: string, userId: string, defaultValue: string = ''): string {
+    if (!this.initialized) {
+      console.warn('FlagForge: SDK not initialized. Call init() first.');
+      return defaultValue;
+    }
+
+    const flag = this.flags.get(flagKey);
+    if (!flag) {
+      console.warn(`FlagForge: Flag "${flagKey}" not found.`);
+      return defaultValue;
+    }
+
+    const result = this.evaluateFlag(flag, userId);
+    this.logEvaluation(flagKey, result.enabled, userId);
+
+    if (!result.enabled || !result.variant) {
+      return defaultValue;
+    }
+
+    return result.variant;
+  }
+
+  /**
    * Get detailed evaluation result including reason
    * Useful for debugging
    */
@@ -184,16 +221,50 @@ export class FlagForgeSDK {
     const hashScore = this.hashUserFlag(userId, flag.key);
     
     if (hashScore < flag.rolloutPercentage) {
+      // For multivariate flags, determine which variant the user gets
+      let variant: string | undefined;
+      if (flag.type === 'MULTIVARIATE' && flag.variants && flag.variants.length > 0) {
+        variant = this.selectVariant(flag.variants, userId, flag.key);
+      }
+
       return {
         enabled: true,
         reason: `PERCENTAGE_ROLLOUT (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
+        variant,
       };
+    }
+
+    // Return off variant for multivariate flags
+    let offVariant: string | undefined;
+    if (flag.type === 'MULTIVARIATE' && flag.offVariantId && flag.variants) {
+      const off = flag.variants.find(v => v.id === flag.offVariantId);
+      if (off) offVariant = off.value;
     }
 
     return {
       enabled: false,
       reason: `PERCENTAGE_EXCLUDED (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
+      variant: offVariant,
     };
+  }
+
+  /**
+   * Select a variant for a user based on weighted distribution
+   */
+  private selectVariant(variants: Variant[], userId: string, flagKey: string): string {
+    const hash = this.hashUserFlag(userId, flagKey + ':variant');
+    const totalWeight = variants.reduce((sum, v) => sum + v.weight, 0);
+    
+    let cumulative = 0;
+    for (const variant of variants) {
+      cumulative += (variant.weight / totalWeight) * 100;
+      if (hash < cumulative) {
+        return variant.value;
+      }
+    }
+    
+    // Fallback to last variant
+    return variants[variants.length - 1].value;
   }
 
   /**
