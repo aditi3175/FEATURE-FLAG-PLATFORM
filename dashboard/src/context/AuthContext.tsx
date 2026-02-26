@@ -29,9 +29,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = await AuthAPI.getCurrentUser();
           setUser({ id: userData.id, name: userData.name, email: userData.email });
           setIsAuthenticated(true);
-        } catch (err) {
-          // Token invalid, clear it
-          TokenService.removeToken();
+        } catch (err: any) {
+          // Only clear token on auth errors (401/403), not on network/server errors
+          if (err.message === 'Failed to get user data') {
+            // Could be 401 (invalid token) or server error
+            // Try to decode the token to preserve session during cold starts
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              // Check if token is expired
+              if (payload.exp && payload.exp * 1000 > Date.now()) {
+                // Token is still valid, server might just be cold-starting
+                setUser({ id: payload.userId, name: payload.email?.split('@')[0] || 'User', email: payload.email });
+                setIsAuthenticated(true);
+              } else {
+                // Token is actually expired
+                TokenService.removeToken();
+              }
+            } catch {
+              TokenService.removeToken();
+            }
+          }
         }
       }
       
