@@ -284,7 +284,7 @@ export default function ProjectDetails() {
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.95, y: -10 }}
                               transition={{ duration: 0.1 }}
-                              className="absolute right-0 top-8 w-40 glass-surface border border-white/10 rounded-lg shadow-2xl overflow-hidden z-50"
+                              className="absolute right-0 top-8 w-40 glass-surface border border-white/10 rounded-lg shadow-2xl z-50"
                             >
                               <button
                                 onClick={() => handleEditFlag(flag)}
