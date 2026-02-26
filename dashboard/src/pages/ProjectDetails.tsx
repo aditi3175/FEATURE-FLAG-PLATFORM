@@ -211,7 +211,7 @@ export default function ProjectDetails() {
 
         {/* Flags Table */}
         {filteredFlags.length > 0 ? (
-          <div className="bento-surface inner-glow rounded-xl overflow-hidden border border-white/5">
+          <div className="bento-surface inner-glow rounded-xl border border-white/5">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/5">
