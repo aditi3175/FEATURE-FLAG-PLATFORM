@@ -1,0 +1,1651 @@
+﻿===== server/src/utils/hash.ts =====
+import crypto from 'crypto';
+
+/**
+ * Generates a deterministic hash score (0-99) for a given user and flag combination.
+ * Uses MD5 hashing to ensure consistent results for the same input.
+ * 
+ * @param userId - The user identifier
+ * @param flagKey - The flag key
+ * @returns A number between 0 and 99 (inclusive)
+ */
+export function hashUserFlag(userId: string, flagKey: string): number {
+  // Concatenate userId and flagKey with a separator
+  const seed = `${userId}:${flagKey}`;
+  
+  // Generate MD5 hash
+  const hash = crypto.createHash('md5').update(seed).digest('hex');
+  
+  // Take first 8 characters, convert to integer, and mod 100
+  const hashValue = parseInt(hash.substring(0, 8), 16);
+  const score = hashValue % 100;
+  
+  return score;
+}
+
+/**
+ * Check if a percentage value is valid (0-100)
+ */
+export function isValidPercentage(value: number): boolean {
+  return value >= 0 && value <= 100;
+}
+
+===== server/src/services/evaluator.ts =====
+import { hashUserFlag } from '../utils/hash';
+
+export interface TargetingRules {
+  allowed_users?: string[];
+  blocked_users?: string[];
+}
+
+export interface Variant {
+  id: string;
+  name: string;
+  value: any;
+  rolloutPercentage: number;
+}
+
+export interface FlagData {
+  key: string;
+  type: 'BOOLEAN' | 'MULTIVARIATE';
+  status: boolean;
+  rolloutPercentage: number;
+  targetingRules: TargetingRules;
+  variants?: Variant[];
+  defaultVariantId?: string | null;
+  offVariantId?: string | null;
+}
+
+export interface EvaluationResult {
+  enabled: boolean;
+  variantId?: string | null;
+  value?: any;
+  reason: string;
+}
+
+/**
+ * Core flag evaluation engine - stateless and deterministic
+ */
+export function evaluateFlag(flagData: FlagData, userId: string): EvaluationResult {
+  // Step 1: Check global kill switch
+  if (!flagData.status) {
+    const offVariant = flagData.variants?.find(v => v.id === flagData.offVariantId);
+    return {
+      enabled: false,
+      value: offVariant?.value ?? false,
+      variantId: offVariant?.id,
+      reason: 'KILL_SWITCH',
+    };
+  }
+
+  // Step 2: Check if user is blocked
+  if (flagData.targetingRules.blocked_users?.includes(userId)) {
+     const offVariant = flagData.variants?.find(v => v.id === flagData.offVariantId);
+    return {
+      enabled: false,
+      value: offVariant?.value ?? false,
+      variantId: offVariant?.id,
+      reason: 'BLOCKED_USER',
+    };
+  }
+
+  // Step 3: Check whitelist (allowed users)
+  if (flagData.targetingRules.allowed_users?.includes(userId)) {
+    const onVariant = flagData.variants?.find(v => v.id === flagData.defaultVariantId);
+    return {
+      enabled: true,
+      value: onVariant?.value ?? true,
+      variantId: onVariant?.id,
+      reason: 'WHITELISTED',
+    };
+  }
+
+  // Step 4: Percentage-based rollout using deterministic hashing
+  const hashScore = hashUserFlag(userId, flagData.key); // 0-100
+
+  // 4a. Handle BOOLEAN Flags
+  if (flagData.type === 'BOOLEAN' || !flagData.variants?.length) {
+    if (hashScore < flagData.rolloutPercentage) {
+      return {
+        enabled: true,
+        value: true,
+        reason: `PERCENTAGE_ROLLOUT (score: ${hashScore}, threshold: ${flagData.rolloutPercentage})`,
+      };
+    }
+    return {
+      enabled: false,
+      value: false,
+      reason: `PERCENTAGE_EXCLUDED (score: ${hashScore}, threshold: ${flagData.rolloutPercentage})`,
+    };
+  }
+
+  // 4b. Handle MULTIVARIATE Flags
+  // Use bucket hashing to serve variants based on their rolloutPercentage
+  let cumulative = 0;
+  for (const variant of flagData.variants) {
+    cumulative += variant.rolloutPercentage;
+    if (hashScore < cumulative) {
+      return {
+        enabled: true,
+        value: variant.value,
+        variantId: variant.id,
+        reason: `VARIANT_ROLLOUT (variant: ${variant.id}, score: ${hashScore})`,
+      };
+    }
+  }
+
+  // Fallback if hash exceeds all variant ranges (shouldn't happen if they sum to 100)
+  // or serve default/off variant
+  const defaultVar = flagData.variants.find(v => v.id === flagData.defaultVariantId) || flagData.variants[0];
+  return {
+    enabled: true, // It's "enabled" just fallthrough
+    value: defaultVar?.value,
+    variantId: defaultVar?.id,
+    reason: 'FALLBACK_DEFAULT',
+  };
+}
+
+===== server/src/services/cache.ts =====
+import redisClient from '../config/redis';
+import prisma from '../config/database';
+
+const CACHE_TTL = 300; // 5 minutes in seconds
+const CACHE_PREFIX = 'flag:';
+
+/**
+ * Generate cache key for a flag
+ */
+function getCacheKey(projectId: string, flagKey: string): string {
+  return `${CACHE_PREFIX}${projectId}:${flagKey}`;
+}
+
+/**
+ * Get flag from cache or database
+ * Implements cache-aside pattern
+ */
+export async function getFlag(projectId: string, flagKey: string) {
+  const cacheKey = getCacheKey(projectId, flagKey);
+
+  if (redisClient) {
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error('Cache read error:', error);
+    }
+  }
+
+  // Cache miss or no Redis - fetch from database
+  const flag = await prisma.flag.findUnique({
+    where: {
+      projectId_key_environment: {
+        projectId,
+        key: flagKey,
+        environment: 'Production',
+      },
+    },
+  });
+
+  if (flag && redisClient) {
+    try {
+      await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(flag));
+    } catch (error) {
+      console.error('Cache write error:', error);
+    }
+  }
+
+  return flag;
+}
+
+/**
+ * Invalidate flag cache when it's updated
+ */
+export async function invalidateFlag(projectId: string, flagKey: string): Promise<void> {
+  if (!redisClient) return;
+  const cacheKey = getCacheKey(projectId, flagKey);
+
+  try {
+    await redisClient.del(cacheKey);
+  } catch (error) {
+    console.error('Cache invalidation error:', error);
+  }
+}
+
+/**
+ * Warm cache by loading all flags for a project
+ */
+export async function warmCache(projectId: string): Promise<void> {
+  if (!redisClient) return;
+
+  const flags = await prisma.flag.findMany({
+    where: { projectId },
+  });
+
+  for (const flag of flags) {
+    const cacheKey = getCacheKey(projectId, flag.key);
+    try {
+      await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(flag));
+    } catch (error) {
+      console.error(`Failed to warm cache for flag ${flag.key}:`, error);
+    }
+  }
+
+  console.log(`âœ… Cache warmed for project ${projectId} with ${flags.length} flags`);
+}
+
+===== server/src/config/redis.ts =====
+import Redis from 'ioredis';
+
+let redisClient: Redis | null = null;
+
+if (process.env.REDIS_URL) {
+  redisClient = new Redis(process.env.REDIS_URL, {
+    retryStrategy(times) {
+      const delay = Math.min(times * 50, 2000);
+      return delay;
+    },
+    maxRetriesPerRequest: 3,
+  });
+
+  redisClient.on('connect', () => {
+    console.log('âœ… Redis connected successfully');
+  });
+
+  redisClient.on('error', (err) => {
+    console.error('âŒ Redis connection error:', err);
+  });
+} else {
+  console.log('â„¹ï¸  Redis not configured â€” running without cache');
+}
+
+export default redisClient;
+
+===== server/src/routes/evaluate.ts =====
+import { Router, Request, Response } from 'express';
+import prisma from '../config/database';
+import { getFlag } from '../services/cache';
+import { evaluateFlag } from '../services/evaluator';
+
+const router = Router();
+
+/**
+ * POST /api/evaluate - Evaluate a flag for a user (SDK endpoint)
+ * 
+ * Body:
+ *   - apiKey: string (required)
+ *   - flagKey: string (required)
+ *   - userId: string (required)
+ *   - context: object (optional, for future use)
+ */
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { apiKey, flagKey, userId, context } = req.body;
+
+    // Validation
+    if (!apiKey || !flagKey || !userId) {
+      return res.status(400).json({
+        error: 'apiKey, flagKey, and userId are required',
+      });
+    }
+
+    // Find project by API key
+    const project = await prisma.project.findUnique({
+      where: { apiKey },
+    });
+
+    if (!project) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+
+    // Get flag (from cache or database)
+    const flag = await getFlag(project.id, flagKey);
+
+    if (!flag) {
+      return res.status(404).json({
+        enabled: false,
+        reason: 'FLAG_NOT_FOUND',
+      });
+    }
+
+    // Evaluate flag
+    const startTime = Date.now();
+    const result = evaluateFlag(
+      {
+        key: flag.key,
+        type: flag.type,
+        status: flag.status,
+        rolloutPercentage: flag.rolloutPercentage,
+        targetingRules: flag.targetingRules as any,
+        variants: flag.variants as any,
+        defaultVariantId: flag.defaultVariantId,
+        offVariantId: flag.offVariantId
+      },
+      userId
+    );
+    const latency = Date.now() - startTime;
+
+    // Log evaluation event asynchronously (don't block response)
+    prisma.evaluationEvent.create({
+      data: {
+        projectId: project.id,
+        flagKey: flag.key,
+        result: result.enabled,
+        environment: 'Production', // Default for legacy endpoint
+        userId: userId,
+        latency: latency,
+        timestamp: new Date()
+      }
+    }).catch(err => console.error('Failed to log evaluation event:', err));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error evaluating flag:', error);
+    res.status(500).json({
+      enabled: false,
+      reason: 'EVALUATION_ERROR',
+    });
+  }
+});
+
+export default router;
+
+===== server/src/routes/sdk.ts =====
+import { Router, Request, Response } from 'express';
+import prisma from '../config/database';
+import { getFlag } from '../services/cache';
+import { evaluateFlag } from '../services/evaluator';
+import { logSdkEvent } from '../controllers/analyticsController';
+
+const router = Router();
+
+/**
+ * GET /api/v1/sdk/flags - Get all flags for SDK (header-based auth)
+ * 
+ * Headers:
+ *   - x-api-key: string (required)
+ * 
+ * This endpoint is called by the SDK to fetch all flags for a project
+ */
+router.get('/flags', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const apiKey = req.headers['x-api-key'] as string;
+
+    if (!apiKey) {
+      res.status(401).json({ error: 'API key is required in x-api-key header' });
+      return;
+    }
+
+    const environment = (req.query.environment as string) || 'Production';
+
+    // Find project by API key
+    const project = await prisma.project.findUnique({
+      where: { apiKey },
+      include: {
+        flags: {
+          where: {
+            environment: environment,
+          } as any, // Cast to any to bypass stale Prisma types
+          select: {
+            id: true,
+            key: true,
+            description: true,
+            status: true,
+            type: true,
+            rolloutPercentage: true,
+            targetingRules: true, // Cast to any to bypass stale Prisma types
+            variants: true,
+            defaultVariantId: true,
+            offVariantId: true,
+            environment: true,
+          } as any,
+        },
+      },
+    });
+
+    if (!project) {
+      res.status(401).json({ error: 'Invalid API key' });
+      return;
+    }
+
+    // Return flags array directly (SDK expects array, not object)
+    res.json(project.flags);
+  } catch (error) {
+    console.error('Error fetching flags for SDK:', error);
+    res.status(500).json({ error: 'Failed to fetch flags' });
+  }
+});
+
+/**
+ * POST /api/v1/sdk/evaluate - Evaluate a single flag (backward compatibility)
+ * 
+ * Headers:
+ *   - x-api-key: string (required)
+ * 
+ * Body:
+ *   - flagKey: string (required)
+ *   - userId: string (required)
+ *   - context: object (optional)
+ */
+router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const apiKey = req.headers['x-api-key'] as string;
+    const { flagKey, userId, context } = req.body;
+
+    // Validation
+    if (!apiKey) {
+      res.status(401).json({ 
+        enabled: false, 
+        reason: 'API key is required in x-api-key header' 
+      });
+      return;
+    }
+
+    if (!flagKey || !userId) {
+      res.status(400).json({
+        enabled: false,
+        reason: 'flagKey and userId are required',
+      });
+      return;
+    }
+
+    // Find project by API key
+    const project = await prisma.project.findUnique({
+      where: { apiKey },
+    });
+
+    if (!project) {
+      res.status(401).json({ 
+        enabled: false, 
+        reason: 'Invalid API key' 
+      });
+      return;
+    }
+
+    // Get flag (from cache or database)
+    const flag = await getFlag(project.id, flagKey);
+
+    if (!flag) {
+      res.status(404).json({
+        enabled: false,
+        reason: 'FLAG_NOT_FOUND',
+      });
+      return;
+    }
+
+    // Evaluate flag
+    const startTime = Date.now();
+    const result = evaluateFlag(
+      {
+        key: flag.key,
+        type: flag.type,
+        status: flag.status,
+        rolloutPercentage: flag.rolloutPercentage,
+        targetingRules: flag.targetingRules as any,
+        variants: flag.variants as any,
+        defaultVariantId: flag.defaultVariantId,
+        offVariantId: flag.offVariantId
+      },
+      userId
+    );
+    const latency = Date.now() - startTime;
+
+    // Log evaluation event asynchronously
+    prisma.evaluationEvent.create({
+      data: {
+        projectId: project.id,
+        flagKey: flag.key,
+        result: result.enabled,
+        environment: 'Production', // TODO: Get from request
+        userId: userId,
+        latency: latency,
+        timestamp: new Date()
+      }
+    }).catch(err => console.error('Failed to log SDK evaluation event:', err));
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error evaluating flag:', error);
+    res.status(500).json({
+      enabled: false,
+      reason: 'EVALUATION_ERROR',
+    });
+  }
+});
+
+router.post('/events', logSdkEvent);
+
+export default router;
+
+===== server/src/scripts/generate_traffic.ts =====
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+const API_URL = 'http://localhost:4000/api/evaluate';
+
+async function generateTraffic() {
+  try {
+    // 1. Get a project and flag
+    const project = await prisma.project.findFirst({
+      include: { flags: true }
+    });
+
+    if (!project || project.flags.length === 0) {
+      console.log('No project or flags found. Please create one in the dashboard first.');
+      return;
+    }
+
+    const flag = project.flags[0];
+    const apiKey = project.apiKey;
+
+    console.log(`Generating traffic for Project: ${project.name}, Flag: ${flag.key}`);
+
+    // 2. Make requests
+    for (let i = 0; i < 5; i++) {
+      try {
+        const start = Date.now();
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey,
+            flagKey: flag.key,
+            userId: `test-user-${i}`,
+            context: { plan: 'premium' }
+          })
+        });
+
+        const duration = Date.now() - start;
+        
+        if (response.ok) {
+          console.log(`Request ${i + 1}: Success (${duration}ms)`);
+        } else {
+          console.error(`Request ${i + 1} failed: ${response.status}`);
+        }
+        
+        // Add a small delay
+        await new Promise(r => setTimeout(r, 100));
+      } catch (err: any) {
+        console.error(`Request ${i + 1} failed:`, err.message);
+      }
+    }
+
+    console.log('Traffic generation complete!');
+  } catch (err) {
+    console.error('Script error:', err);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+generateTraffic();
+
+===== server/prisma/schema.prisma =====
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String   // Will be hashed with bcrypt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  projects  Project[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  apiKey    String   @unique @map("api_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  userId    String   @map("user_id")
+  
+  flags     Flag[]
+  evaluationEvents EvaluationEvent[]
+  auditLogs AuditLog[]
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
+
+enum FlagType {
+  BOOLEAN
+  MULTIVARIATE
+}
+
+model Flag {
+  id                String   @id @default(uuid())
+  projectId         String   @map("project_id")
+  key               String
+  description       String   @default("")
+  type              FlagType @default(BOOLEAN)
+  status            Boolean  @default(true)  // Global kill switch
+  rolloutPercentage Int      @default(0) @map("rollout_percentage")
+  environment       String   @default("Production") // Dev, Staging, Production
+  targetingRules    Json     @default("{}") @map("targeting_rules")
+  variants          Json     @default("[]") // Array of Variant objects
+  defaultVariantId  String?  @map("default_variant_id")
+  offVariantId      String?  @map("off_variant_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key, environment])
+  @@map("flags")
+}
+
+model EvaluationEvent {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  flagKey   String   @map("flag_key")
+  result    Boolean  @map("evaluation_result") @default(true)
+  timestamp DateTime @default(now())
+  latency   Int      @default(0) // Response time in ms
+  environment String @default("Production")
+  userId    String?  @map("user_id")
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@map("evaluation_events")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  projectId   String   @map("project_id")
+  userId      String   @map("user_id")
+  action      String   // "flag.created" | "flag.updated" | "flag.deleted" | "flag.toggled"
+  entityType  String   @default("flag") @map("entity_type")
+  entityId    String   @map("entity_id")
+  entityName  String   @map("entity_name")
+  changes     Json     @default("{}") // { before: {...}, after: {...} }
+  timestamp   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([projectId, timestamp])
+  @@map("audit_logs")
+}
+
+
+===== server/src/app.ts =====
+import 'dotenv/config';
+import express from "express";
+import cors from "cors";
+import authRoutes from './routes/auth';
+import apiRoutes from './routes/api';
+import sdkRoutes from './routes/sdk';
+import evaluateRoutes from './routes/evaluate'; // Legacy endpoint
+import analyticsRoutes from './routes/analytics.routes';
+import auditRoutes from './routes/auditRoutes';
+
+const app = express();
+
+// Middleware
+// Middleware
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    // Allow localhost (dev)
+    if (origin.startsWith('http://localhost')) return callback(null, true);
+    // Allow Vercel deployments
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    // Allow configured frontend URL
+    if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+app.use(express.json());
+
+// Health check
+app.get("/health", (_req, res) => {
+  res.json({ status: "OK" });
+});
+
+// Database health check (for debugging)
+app.get("/health/db", async (_req, res) => {
+  try {
+    const prisma = (await import('./config/database')).default;
+    await prisma.$queryRaw`SELECT 1`;
+    
+    // Check if tables exist
+    const tables: any[] = await prisma.$queryRaw`SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
+    const tableNames = tables.map((t: any) => t.tablename);
+    
+    // Try to count users
+    let userCount = -1;
+    try {
+      userCount = await prisma.user.count();
+    } catch (e: any) {
+      return res.status(500).json({ status: "ERROR", database: "connected", tables: tableNames, modelError: e.message });
+    }
+    
+    res.json({ status: "OK", database: "connected", tables: tableNames, userCount });
+  } catch (error: any) {
+    res.status(500).json({ status: "ERROR", database: "disconnected", error: error.message });
+  }
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api', apiRoutes); // Unified API routes (projects + flags)
+app.use('/api/v1/sdk', sdkRoutes); // SDK specific routes
+app.use('/api/evaluate', evaluateRoutes); // Legacy evaluate endpoint (backward compatibility)
+app.use('/api/analytics', analyticsRoutes); // Analytics and stats
+app.use('/api', auditRoutes); // Audit logs
+
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+export default app;
+
+===== server/package.json =====
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "npx prisma generate && tsc",
+    "start": "npx prisma migrate deploy && node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^6.2.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^25.2.2",
+    "@types/uuid": "^10.0.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.3",
+    "prisma": "^6.2.0",
+    "typescript": "^5.9.3",
+    "uuid": "^11.0.6"
+  },
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0"
+  }
+}
+
+===== sdk-node/src/FlagForgeClient.ts =====
+
+import axios, { AxiosInstance } from 'axios';
+import { EventEmitter } from 'events';
+
+export interface FlagForgeConfig {
+  apiKey: string;
+  apiUrl?: string;
+  refreshInterval?: number; // ms, default 60000
+}
+
+export interface Flag {
+  key: string;
+  type: 'BOOLEAN' | 'MULTIVARIATE';
+  status: boolean;
+  rolloutPercentage: number;
+  targetingRules: {
+    allowed_users?: string[];
+    blocked_users?: string[];
+  };
+  variants?: Array<{
+    id: string;
+    value: any;
+    name: string;
+    rolloutPercentage: number;
+  }>;
+  defaultVariantId?: string | null;
+  offVariantId?: string | null;
+}
+
+export interface EvaluationResult {
+  enabled: boolean;
+  value: any;
+  variantId?: string | null;
+  reason: string;
+}
+
+export class FlagForgeClient extends EventEmitter {
+  private config: FlagForgeConfig;
+  private client: AxiosInstance;
+  private flags: Map<string, Flag>;
+  private timer?: NodeJS.Timeout;
+
+  constructor(config: FlagForgeConfig) {
+    super();
+    this.config = {
+      apiUrl: 'http://localhost:4000',
+      refreshInterval: 60000,
+      ...config
+    };
+    this.flags = new Map();
+    this.client = axios.create({
+      baseURL: this.config.apiUrl,
+      headers: { 'x-api-key': this.config.apiKey }
+    });
+  }
+
+  async init(): Promise<void> {
+    await this.refreshFlags();
+    if (this.config.refreshInterval && this.config.refreshInterval > 0) {
+      this.timer = setInterval(() => this.refreshFlags(), this.config.refreshInterval);
+    }
+  }
+
+  private async refreshFlags() {
+    try {
+      const response = await this.client.get('/api/v1/sdk/flags');
+      const flagsList: Flag[] = response.data;
+      
+      this.flags.clear();
+      flagsList.forEach(flag => this.flags.set(flag.key, flag));
+      this.emit('update');
+    } catch (error) {
+      console.error('FlagForge SDK: Failed to refresh flags', error);
+      this.emit('error', error);
+    }
+  }
+
+  getVariant(flagKey: string, userId: string, defaultValue: any = null): EvaluationResult {
+    const flag = this.flags.get(flagKey);
+
+    if (!flag) {
+      return { enabled: false, value: defaultValue, reason: 'FLAG_NOT_FOUND' };
+    }
+
+    // 1. Kill Switch
+    if (!flag.status) {
+       return this.getOffVariant(flag, 'KILL_SWITCH', defaultValue);
+    }
+
+    // 2. Targeting Rules
+    if (flag.targetingRules?.blocked_users?.includes(userId)) {
+      return this.getOffVariant(flag, 'BLOCKED_USER', defaultValue);
+    }
+    if (flag.targetingRules?.allowed_users?.includes(userId)) {
+       return this.getDefaultVariant(flag, 'WHITELISTED', defaultValue);
+    }
+
+    // 3. Rollout
+    const hashVal = this.hash(userId, flagKey);
+    
+    // Boolean Logic
+    if (flag.type === 'BOOLEAN' || !flag.variants?.length) {
+      if (hashVal < flag.rolloutPercentage) {
+        return { enabled: true, value: true, reason: 'ROLLOUT_MATCH' };
+      }
+      return { enabled: false, value: false, reason: 'ROLLOUT_MISS' };
+    }
+
+    // Multivariate Logic
+    let cumulative = 0;
+    if (flag.variants) {
+        for (const variant of flag.variants) {
+        cumulative += variant.rolloutPercentage;
+        if (hashVal < cumulative) {
+            return {
+            enabled: true,
+            value: variant.value,
+            variantId: variant.id,
+            reason: 'VARIANT_MATCH'
+            };
+        }
+        }
+    }
+
+    return this.getDefaultVariant(flag, 'FALLBACK', defaultValue);
+  }
+
+  // Helpers
+  private getOffVariant(flag: Flag, reason: string, defaultValue: any): EvaluationResult {
+    const variant = flag.variants?.find(v => v.id === flag.offVariantId);
+    return {
+      enabled: false,
+      value: variant ? variant.value : (flag.type === 'BOOLEAN' ? false : defaultValue),
+      variantId: variant?.id,
+      reason
+    };
+  }
+
+  private getDefaultVariant(flag: Flag, reason: string, defaultValue: any): EvaluationResult {
+    const variant = flag.variants?.find(v => v.id === flag.defaultVariantId);
+     return {
+      enabled: true,
+      value: variant ? variant.value : (flag.type === 'BOOLEAN' ? true : defaultValue),
+      variantId: variant?.id,
+      reason
+    };
+  }
+
+  private hash(userId: string, key: string): number {
+    const seed = `${userId}:${key}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      const char = seed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // overflow
+    }
+    return Math.abs(hash) % 100;
+  }
+
+  close() {
+    if (this.timer) clearInterval(this.timer);
+  }
+}
+
+===== sdk-node/package.json =====
+{
+  "name": "flagforge-node-sdk",
+  "version": "0.1.1",
+  "description": "Node.js Server-Side SDK for FlagForge",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "feature-flags",
+    "flagforge",
+    "node-sdk"
+  ],
+  "author": "FlagForge Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}
+
+===== sdk/src/index.ts =====
+export interface FlagForgeConfig {
+  apiKey: string;
+  apiUrl?: string;
+  pollingInterval?: number; // milliseconds, default: 60000 (1 minute)
+}
+
+export interface Variant {
+  id: string;
+  name?: string;
+  value: string;
+  weight?: number;
+  rolloutPercentage?: number;
+}
+
+export interface FlagData {
+  key: string;
+  status: boolean;
+  rolloutPercentage: number;
+  type?: 'BOOLEAN' | 'MULTIVARIATE';
+  variants?: Variant[];
+  defaultVariantId?: string;
+  offVariantId?: string;
+  targetingRules: {
+    allowed_users?: string[];
+    blocked_users?: string[];
+  };
+}
+
+export interface EvaluationResult {
+  enabled: boolean;
+  reason: string;
+  variant?: string;
+}
+
+/**
+ * FlagForge SDK for feature flag evaluation
+ * 
+ * @example
+ * ```typescript
+ * const sdk = new FlagForgeSDK({
+ *   apiKey: 'your-project-api-key',
+ *   apiUrl: 'https://api.flagforge.com', // optional,
+ * });
+ * 
+ * await sdk.init();
+ * 
+ * if (sdk.isEnabled('new-feature', 'user-123')) {
+ *   // Show new feature
+ * }
+ * ```
+ */
+export class FlagForgeSDK {
+  private config: FlagForgeConfig;
+  private flags: Map<string, FlagData> = new Map();
+  private pollingTimer?: NodeJS.Timeout;
+  private initialized = false;
+  private listeners: Set<() => void> = new Set();
+
+  constructor(config: FlagForgeConfig) {
+    this.config = {
+      apiUrl: 'http://localhost:4000',
+      pollingInterval: 60000, // 1 minute
+      ...config,
+    };
+
+    if (!this.config.apiKey) {
+      throw new Error('FlagForge: apiKey is required');
+    }
+  }
+
+  /**
+   * Initialize the SDK by fetching all flags
+   * Call this before using isEnabled()
+   */
+  async init(): Promise<void> {
+    try {
+      await this.refresh();
+      this.initialized = true;
+
+      // Start polling for updates
+      if (this.config.pollingInterval && this.config.pollingInterval > 0) {
+        this.startPolling();
+      }
+    } catch (error) {
+      console.error('FlagForge: Failed to initialize:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a flag is enabled for a specific user
+   * 
+   * @param flagKey - The flag key
+   * @param userId - The user identifier
+   * @returns true if flag is enabled, false otherwise
+   */
+  isEnabled(flagKey: string, userId: string): boolean {
+    if (!this.initialized) {
+      console.warn('FlagForge: SDK not initialized. Call init() first. Returning false.');
+      return false;
+    }
+
+    const flag = this.flags.get(flagKey);
+    
+    if (!flag) {
+      console.warn(`FlagForge: Flag "${flagKey}" not found. Returning false.`);
+      return false;
+    }
+
+    const result = this.evaluateFlag(flag, userId);
+    
+    // Log evaluation to analytics
+    this.logEvaluation(flagKey, result.enabled, userId);
+    
+    return result.enabled;
+  }
+
+  /**
+   * Get the variant value for a multivariate flag
+   * Returns the variant value string, or the defaultValue if flag is not found/disabled
+   */
+  getVariant(flagKey: string, userId: string, defaultValue: string = ''): string {
+    if (!this.initialized) {
+      console.warn('FlagForge: SDK not initialized. Call init() first.');
+      return defaultValue;
+    }
+
+    const flag = this.flags.get(flagKey);
+    if (!flag) {
+      console.warn(`FlagForge: Flag "${flagKey}" not found.`);
+      return defaultValue;
+    }
+
+    const result = this.evaluateFlag(flag, userId);
+    this.logEvaluation(flagKey, result.enabled, userId);
+
+    if (!result.enabled || !result.variant) {
+      return defaultValue;
+    }
+
+    return result.variant;
+  }
+
+  /**
+   * Get detailed evaluation result including reason
+   * Useful for debugging
+   */
+  evaluate(flagKey: string, userId: string): EvaluationResult {
+    if (!this.initialized) {
+      return { enabled: false, reason: 'SDK_NOT_INITIALIZED' };
+    }
+
+    const flag = this.flags.get(flagKey);
+    
+    if (!flag) {
+      return { enabled: false, reason: 'FLAG_NOT_FOUND' };
+    }
+
+    return this.evaluateFlag(flag, userId);
+  }
+
+  /**
+   * Manually refresh flags from the server
+   */
+  async refresh(): Promise<void> {
+    try {
+      const response = await this.fetchFlags();
+      
+      if (response.ok) {
+        const flags: FlagData[] = await response.json();
+        
+        // Update local cache
+        this.flags.clear();
+        flags.forEach((flag) => {
+          this.flags.set(flag.key, flag);
+        });
+        
+        console.log(`FlagForge: Loaded ${flags.length} flags`);
+        
+        // Notify listeners of flag changes (for React integration)
+        this.notifyListeners();
+      } else {
+        throw new Error(`Failed to fetch flags: ${response.status} ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('FlagForge: Failed to refresh flags:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop polling for flag updates
+   */
+  destroy(): void {
+    if (this.pollingTimer) {
+      clearInterval(this.pollingTimer);
+      this.pollingTimer = undefined;
+    }
+    this.initialized = false;
+    this.flags.clear();
+  }
+
+  /**
+   * Local flag evaluation using the same algorithm as the backend
+   */
+  private evaluateFlag(flag: FlagData, userId: string): EvaluationResult {
+    // Step 1: Check global kill switch
+    if (!flag.status) {
+      return { enabled: false, reason: 'KILL_SWITCH' };
+    }
+
+    // Step 2: Check if user is blocked
+    if (flag.targetingRules.blocked_users?.includes(userId)) {
+      return { enabled: false, reason: 'BLOCKED_USER' };
+    }
+
+    // Step 3: Check whitelist
+    if (flag.targetingRules.allowed_users?.includes(userId)) {
+      return { enabled: true, reason: 'WHITELISTED' };
+    }
+
+    // Step 4: Percentage-based rollout
+    const hashScore = this.hashUserFlag(userId, flag.key);
+    
+    if (hashScore < flag.rolloutPercentage) {
+      // For multivariate flags, determine which variant the user gets
+      let variant: string | undefined;
+      if (flag.type === 'MULTIVARIATE' && flag.variants && flag.variants.length > 0) {
+        variant = this.selectVariant(flag.variants, userId, flag.key);
+      }
+
+      return {
+        enabled: true,
+        reason: `PERCENTAGE_ROLLOUT (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
+        variant,
+      };
+    }
+
+    // Return off variant for multivariate flags
+    let offVariant: string | undefined;
+    if (flag.type === 'MULTIVARIATE' && flag.offVariantId && flag.variants) {
+      const off = flag.variants.find(v => v.id === flag.offVariantId);
+      if (off) offVariant = off.value;
+    }
+
+    return {
+      enabled: false,
+      reason: `PERCENTAGE_EXCLUDED (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
+      variant: offVariant,
+    };
+  }
+
+  /**
+   * Select a variant for a user based on weighted distribution
+   */
+  private selectVariant(variants: Variant[], userId: string, flagKey: string): string {
+    const hash = this.hashUserFlag(userId, flagKey + ':variant');
+    const getWeight = (v: Variant) => v.weight ?? v.rolloutPercentage ?? 1;
+    const totalWeight = variants.reduce((sum, v) => sum + getWeight(v), 0);
+    
+    let cumulative = 0;
+    for (const variant of variants) {
+      cumulative += (getWeight(variant) / totalWeight) * 100;
+      if (hash < cumulative) {
+        return variant.value;
+      }
+    }
+    
+    // Fallback to last variant
+    return variants[variants.length - 1].value;
+  }
+
+  /**
+   * Browser-compatible deterministic hash function
+   * Returns a number between 0-99 for percentage-based rollout
+   */
+  private hashUserFlag(userId: string, flagKey: string): number {
+    const seed = `${userId}:${flagKey}`;
+    let hash = 0;
+    
+    for (let i = 0; i < seed.length; i++) {
+      const char = seed.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Ensure positive and return 0-99
+    return Math.abs(hash) % 100;
+  }
+
+  /**
+   * Subscribe to flag changes (for React integration)
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.unsubscribe(listener);
+  }
+
+  /**
+   * Unsubscribe from flag changes
+   */
+  unsubscribe(listener: () => void): void {
+    this.listeners.delete(listener);
+  }
+
+  /**
+   * Notify all listeners of flag changes
+   */
+  private notifyListeners(): void {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  /**
+   * Log flag evaluation to analytics backend
+   */
+  private logEvaluation(flagKey: string, result: boolean, userId: string): void {
+    // Fire and forget - don't block flag evaluation on analytics
+    const url = `${this.config.apiUrl}/api/v1/sdk/events`;
+    
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.config.apiKey,
+      },
+      body: JSON.stringify({
+        flagKey,
+        result,
+        userId,
+        environment: 'Production',
+      }),
+    }).catch((error) => {
+      // Silently fail analytics - don't impact user experience
+      console.debug('FlagForge: Analytics logging failed:', error);
+    });
+  }
+
+  /**
+   * Fetch flags from the API
+   */
+  private async fetchFlags(): Promise<Response> {
+    const url = `${this.config.apiUrl}/api/v1/sdk/flags`;
+    
+    return fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': this.config.apiKey,
+      },
+    });
+  }
+
+  /**
+   * Start polling for flag updates
+   */
+  private startPolling(): void {
+    this.pollingTimer = setInterval(() => {
+      this.refresh().catch((error) => {
+        console.error('FlagForge: Polling failed:', error);
+      });
+    }, this.config.pollingInterval);
+  }
+}
+
+export default FlagForgeSDK;
+
+===== sdk/src/react.tsx =====
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import FlagForgeSDK from './index';
+
+/**
+ * FlagForge React Context
+ */
+interface FlagForgeContextValue {
+  sdk: FlagForgeSDK | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+const FlagForgeContext = createContext<FlagForgeContextValue | undefined>(undefined);
+
+/**
+ * Props for FlagForgeProvider
+ */
+export interface FlagForgeProviderProps {
+  apiKey: string;
+  apiUrl?: string;
+  pollingInterval?: number;
+  children: ReactNode;
+}
+
+/**
+ * FlagForge Provider Component
+ * 
+ * Wraps your app and initializes the SDK with the provided API key.
+ * Manages loading and error states automatically.
+ * 
+ * @example
+ * ```tsx
+ * <FlagForgeProvider apiKey="ff_prod_...">
+ *   <App />
+ * </FlagForgeProvider>
+ * ```
+ */
+export function FlagForgeProvider({ 
+  apiKey, 
+  apiUrl = 'http://localhost:4000',
+  pollingInterval = 60000,
+  children 
+}: FlagForgeProviderProps) {
+  const [sdk, setSdk] = useState<FlagForgeSDK | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const sdkRef = useRef<FlagForgeSDK | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initializeSDK() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Create new SDK instance
+        const newSdk = new FlagForgeSDK({
+          apiKey,
+          apiUrl,
+          pollingInterval,
+        });
+
+        // Initialize and fetch flags
+        await newSdk.init();
+
+        if (mounted) {
+          sdkRef.current = newSdk;
+          setSdk(newSdk);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err : new Error('Failed to initialize SDK'));
+          setLoading(false);
+        }
+      }
+    }
+
+    initializeSDK();
+
+    // Cleanup on unmount
+    return () => {
+      mounted = false;
+      if (sdkRef.current) {
+        sdkRef.current.destroy();
+        sdkRef.current = null;
+      }
+    };
+  }, [apiKey, apiUrl, pollingInterval]);
+
+  return (
+    <FlagForgeContext.Provider value={{ sdk, loading, error }}>
+      {children}
+    </FlagForgeContext.Provider>
+  );
+}
+
+/**
+ * Hook to access the FlagForge SDK instance
+ * 
+ * @throws Error if used outside FlagForgeProvider
+ */
+function useFlagForgeContext(): FlagForgeContextValue {
+  const context = useContext(FlagForgeContext);
+  
+  if (context === undefined) {
+    throw new Error('useFlagForgeContext must be used within a FlagForgeProvider');
+  }
+  
+  return context;
+}
+
+/**
+ * Hook to check if a feature flag is enabled
+ * 
+ * Automatically triggers a re-render when the flag value changes during polling.
+ * 
+ * @param flagKey - The key of the feature flag
+ * @param userId - The user identifier for targeted rollouts
+ * @returns The current state of the flag (enabled/disabled)
+ * 
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const isNewFeatureEnabled = useFlag('new-feature', 'user-123');
+ *   
+ *   return (
+ *     <div>
+ *       {isNewFeatureEnabled && <NewFeature />}
+ *     </div>
+ *   );
+ * }
+ * ```
+ */
+export function useFlag(flagKey: string, userId: string): boolean {
+  const { sdk, loading } = useFlagForgeContext();
+  const [flagValue, setFlagValue] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!sdk || loading) {
+      setFlagValue(false);
+      return;
+    }
+
+    // Get initial value
+    const initialValue = sdk.isEnabled(flagKey, userId);
+    setFlagValue(initialValue);
+
+    // Subscribe to flag changes
+    const unsubscribe = sdk.subscribe(() => {
+      const newValue = sdk.isEnabled(flagKey, userId);
+      setFlagValue(newValue);
+    });
+
+    // Cleanup subscription on unmount
+    return unsubscribe;
+  }, [sdk, loading, flagKey, userId]);
+
+  return flagValue;
+}
+
+/**
+ * Hook to get the variant value for a multivariate flag
+ * 
+ * @param flagKey - The key of the multivariate feature flag
+ * @param userId - The user identifier for targeted rollouts
+ * @param defaultValue - Default value if flag is not found
+ * @returns The variant value string
+ * 
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const buttonColor = useVariant('button-color', 'user-123', 'blue');
+ *   return <button style={{ background: buttonColor }}>Click me</button>;
+ * }
+ * ```
+ */
+export function useVariant(flagKey: string, userId: string, defaultValue: string = ''): string {
+  const { sdk, loading } = useFlagForgeContext();
+  const [variantValue, setVariantValue] = useState<string>(defaultValue);
+
+  useEffect(() => {
+    if (!sdk || loading) {
+      setVariantValue(defaultValue);
+      return;
+    }
+
+    // Get initial value
+    const initialValue = sdk.getVariant(flagKey, userId, defaultValue);
+    setVariantValue(initialValue);
+
+    // Subscribe to flag changes
+    const unsubscribe = sdk.subscribe(() => {
+      const newValue = sdk.getVariant(flagKey, userId, defaultValue);
+      setVariantValue(newValue);
+    });
+
+    return unsubscribe;
+  }, [sdk, loading, flagKey, userId, defaultValue]);
+
+  return variantValue;
+}
+
+/**
+ * Hook to check if FlagForge is still loading
+ * 
+ * @example
+ * ```tsx
+ * function App() {
+ *   const isLoading = useFlagForgeLoading();
+ *   
+ *   if (isLoading) {
+ *     return <LoadingSpinner />;
+ *   }
+ *   
+ *   return <YourApp />;
+ * }
+ * ```
+ */
+export function useFlagForgeLoading(): boolean {
+  const { loading } = useFlagForgeContext();
+  return loading;
+}
+
+/**
+ * Hook to access any SDK error
+ * 
+ * @example
+ * ```tsx
+ * function App() {
+ *   const error = useFlagForgeError();
+ *   
+ *   if (error) {
+ *     return <ErrorMessage error={error} />;
+ *   }
+ *   
+ *   return <YourApp />;
+ * }
+ * ```
+ */
+export function useFlagForgeError(): Error | null {
+  const { error } = useFlagForgeContext();
+  return error;
+}
+
+export default FlagForgeProvider;
+
+===== docker-compose.yml =====
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: flagforge-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: flagforge
+    ports:
+      - "5433:5432"  # Changed: Host port 5433 to avoid conflict
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: flagforge-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+

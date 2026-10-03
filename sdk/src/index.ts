@@ -1,3 +1,5 @@
+import { hashUserFlag } from './hash';
+
 export interface FlagForgeConfig {
   apiKey: string;
   apiUrl?: string;
@@ -6,8 +8,10 @@ export interface FlagForgeConfig {
 
 export interface Variant {
   id: string;
+  name?: string;
   value: string;
-  weight: number;
+  weight?: number;
+  rolloutPercentage?: number;
 }
 
 export interface FlagData {
@@ -32,16 +36,16 @@ export interface EvaluationResult {
 
 /**
  * FlagForge SDK for feature flag evaluation
- * 
+ *
  * @example
  * ```typescript
  * const sdk = new FlagForgeSDK({
  *   apiKey: 'your-project-api-key',
  *   apiUrl: 'https://api.flagforge.com', // optional,
  * });
- * 
+ *
  * await sdk.init();
- * 
+ *
  * if (sdk.isEnabled('new-feature', 'user-123')) {
  *   // Show new feature
  * }
@@ -50,7 +54,7 @@ export interface EvaluationResult {
 export class FlagForgeSDK {
   private config: FlagForgeConfig;
   private flags: Map<string, FlagData> = new Map();
-  private pollingTimer?: NodeJS.Timeout;
+  private pollingTimer?: ReturnType<typeof setInterval>;
   private initialized = false;
   private listeners: Set<() => void> = new Set();
 
@@ -87,10 +91,6 @@ export class FlagForgeSDK {
 
   /**
    * Check if a flag is enabled for a specific user
-   * 
-   * @param flagKey - The flag key
-   * @param userId - The user identifier
-   * @returns true if flag is enabled, false otherwise
    */
   isEnabled(flagKey: string, userId: string): boolean {
     if (!this.initialized) {
@@ -99,17 +99,17 @@ export class FlagForgeSDK {
     }
 
     const flag = this.flags.get(flagKey);
-    
+
     if (!flag) {
       console.warn(`FlagForge: Flag "${flagKey}" not found. Returning false.`);
       return false;
     }
 
     const result = this.evaluateFlag(flag, userId);
-    
+
     // Log evaluation to analytics
     this.logEvaluation(flagKey, result.enabled, userId);
-    
+
     return result.enabled;
   }
 
@@ -149,7 +149,7 @@ export class FlagForgeSDK {
     }
 
     const flag = this.flags.get(flagKey);
-    
+
     if (!flag) {
       return { enabled: false, reason: 'FLAG_NOT_FOUND' };
     }
@@ -163,18 +163,18 @@ export class FlagForgeSDK {
   async refresh(): Promise<void> {
     try {
       const response = await this.fetchFlags();
-      
+
       if (response.ok) {
         const flags: FlagData[] = await response.json();
-        
+
         // Update local cache
         this.flags.clear();
         flags.forEach((flag) => {
           this.flags.set(flag.key, flag);
         });
-        
+
         console.log(`FlagForge: Loaded ${flags.length} flags`);
-        
+
         // Notify listeners of flag changes (for React integration)
         this.notifyListeners();
       } else {
@@ -199,90 +199,49 @@ export class FlagForgeSDK {
   }
 
   /**
-   * Local flag evaluation using the same algorithm as the backend
+   * Local flag evaluation. Follows exactly the same rules as the server's
+   * evaluateFlag() and uses the same shared hash, so a user gets the same
+   * result whether a flag is evaluated here, in the Node SDK, or on the server.
    */
   private evaluateFlag(flag: FlagData, userId: string): EvaluationResult {
-    // Step 1: Check global kill switch
+    const variantValue = (id?: string) => flag.variants?.find(v => v.id === id)?.value;
+
+    // Step 1: Global kill switch
     if (!flag.status) {
-      return { enabled: false, reason: 'KILL_SWITCH' };
+      return { enabled: false, reason: 'KILL_SWITCH', variant: variantValue(flag.offVariantId) };
     }
 
-    // Step 2: Check if user is blocked
-    if (flag.targetingRules.blocked_users?.includes(userId)) {
-      return { enabled: false, reason: 'BLOCKED_USER' };
+    // Step 2: Blocked users
+    if (flag.targetingRules?.blocked_users?.includes(userId)) {
+      return { enabled: false, reason: 'BLOCKED_USER', variant: variantValue(flag.offVariantId) };
     }
 
-    // Step 3: Check whitelist
-    if (flag.targetingRules.allowed_users?.includes(userId)) {
-      return { enabled: true, reason: 'WHITELISTED' };
+    // Step 3: Allowed users
+    if (flag.targetingRules?.allowed_users?.includes(userId)) {
+      return { enabled: true, reason: 'WHITELISTED', variant: variantValue(flag.defaultVariantId) };
     }
 
-    // Step 4: Percentage-based rollout
-    const hashScore = this.hashUserFlag(userId, flag.key);
-    
-    if (hashScore < flag.rolloutPercentage) {
-      // For multivariate flags, determine which variant the user gets
-      let variant: string | undefined;
-      if (flag.type === 'MULTIVARIATE' && flag.variants && flag.variants.length > 0) {
-        variant = this.selectVariant(flag.variants, userId, flag.key);
-      }
+    // Step 4: Percentage rollout using the shared deterministic hash
+    const score = hashUserFlag(userId, flag.key);
 
-      return {
-        enabled: true,
-        reason: `PERCENTAGE_ROLLOUT (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
-        variant,
-      };
+    // 4a. Boolean flags
+    if (flag.type === 'BOOLEAN' || !flag.variants?.length) {
+      const enabled = score < flag.rolloutPercentage;
+      return { enabled, reason: enabled ? 'ROLLOUT_MATCH' : 'ROLLOUT_MISS' };
     }
 
-    // Return off variant for multivariate flags
-    let offVariant: string | undefined;
-    if (flag.type === 'MULTIVARIATE' && flag.offVariantId && flag.variants) {
-      const off = flag.variants.find(v => v.id === flag.offVariantId);
-      if (off) offVariant = off.value;
-    }
-
-    return {
-      enabled: false,
-      reason: `PERCENTAGE_EXCLUDED (score: ${hashScore}, threshold: ${flag.rolloutPercentage})`,
-      variant: offVariant,
-    };
-  }
-
-  /**
-   * Select a variant for a user based on weighted distribution
-   */
-  private selectVariant(variants: Variant[], userId: string, flagKey: string): string {
-    const hash = this.hashUserFlag(userId, flagKey + ':variant');
-    const totalWeight = variants.reduce((sum, v) => sum + v.weight, 0);
-    
+    // 4b. Multivariate flags: each variant owns a slice of the 0-99 range
     let cumulative = 0;
-    for (const variant of variants) {
-      cumulative += (variant.weight / totalWeight) * 100;
-      if (hash < cumulative) {
-        return variant.value;
+    for (const variant of flag.variants) {
+      cumulative += variant.rolloutPercentage ?? 0;
+      if (score < cumulative) {
+        return { enabled: true, reason: 'VARIANT_MATCH', variant: variant.value };
       }
     }
-    
-    // Fallback to last variant
-    return variants[variants.length - 1].value;
-  }
 
-  /**
-   * Browser-compatible deterministic hash function
-   * Returns a number between 0-99 for percentage-based rollout
-   */
-  private hashUserFlag(userId: string, flagKey: string): number {
-    const seed = `${userId}:${flagKey}`;
-    let hash = 0;
-    
-    for (let i = 0; i < seed.length; i++) {
-      const char = seed.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    
-    // Ensure positive and return 0-99
-    return Math.abs(hash) % 100;
+    // Fallback if variant percentages don't add up to 100
+    const fallback = flag.variants.find(v => v.id === flag.defaultVariantId) ?? flag.variants[0];
+    return { enabled: true, reason: 'FALLBACK', variant: fallback.value };
   }
 
   /**
@@ -313,7 +272,7 @@ export class FlagForgeSDK {
   private logEvaluation(flagKey: string, result: boolean, userId: string): void {
     // Fire and forget - don't block flag evaluation on analytics
     const url = `${this.config.apiUrl}/api/v1/sdk/events`;
-    
+
     fetch(url, {
       method: 'POST',
       headers: {
@@ -337,7 +296,7 @@ export class FlagForgeSDK {
    */
   private async fetchFlags(): Promise<Response> {
     const url = `${this.config.apiUrl}/api/v1/sdk/flags`;
-    
+
     return fetch(url, {
       headers: {
         'Content-Type': 'application/json',

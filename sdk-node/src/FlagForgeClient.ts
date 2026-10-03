@@ -1,6 +1,6 @@
-
 import axios, { AxiosInstance } from 'axios';
 import { EventEmitter } from 'events';
+import { hashUserFlag } from './hash';
 
 export interface FlagForgeConfig {
   apiKey: string;
@@ -65,11 +65,12 @@ export class FlagForgeClient extends EventEmitter {
     try {
       const response = await this.client.get('/api/v1/sdk/flags');
       const flagsList: Flag[] = response.data;
-      
+
       this.flags.clear();
       flagsList.forEach(flag => this.flags.set(flag.key, flag));
       this.emit('update');
     } catch (error) {
+      // Keep serving the last known flags if the server is unreachable
       console.error('FlagForge SDK: Failed to refresh flags', error);
       this.emit('error', error);
     }
@@ -84,7 +85,7 @@ export class FlagForgeClient extends EventEmitter {
 
     // 1. Kill Switch
     if (!flag.status) {
-       return this.getOffVariant(flag, 'KILL_SWITCH', defaultValue);
+      return this.getOffVariant(flag, 'KILL_SWITCH', defaultValue);
     }
 
     // 2. Targeting Rules
@@ -92,12 +93,12 @@ export class FlagForgeClient extends EventEmitter {
       return this.getOffVariant(flag, 'BLOCKED_USER', defaultValue);
     }
     if (flag.targetingRules?.allowed_users?.includes(userId)) {
-       return this.getDefaultVariant(flag, 'WHITELISTED', defaultValue);
+      return this.getDefaultVariant(flag, 'WHITELISTED', defaultValue);
     }
 
-    // 3. Rollout
-    const hashVal = this.hash(userId, flagKey);
-    
+    // 3. Rollout (shared hash, identical to the server)
+    const hashVal = hashUserFlag(userId, flagKey);
+
     // Boolean Logic
     if (flag.type === 'BOOLEAN' || !flag.variants?.length) {
       if (hashVal < flag.rolloutPercentage) {
@@ -108,18 +109,16 @@ export class FlagForgeClient extends EventEmitter {
 
     // Multivariate Logic
     let cumulative = 0;
-    if (flag.variants) {
-        for (const variant of flag.variants) {
-        cumulative += variant.rolloutPercentage;
-        if (hashVal < cumulative) {
-            return {
-            enabled: true,
-            value: variant.value,
-            variantId: variant.id,
-            reason: 'VARIANT_MATCH'
-            };
-        }
-        }
+    for (const variant of flag.variants) {
+      cumulative += variant.rolloutPercentage;
+      if (hashVal < cumulative) {
+        return {
+          enabled: true,
+          value: variant.value,
+          variantId: variant.id,
+          reason: 'VARIANT_MATCH'
+        };
+      }
     }
 
     return this.getDefaultVariant(flag, 'FALLBACK', defaultValue);
@@ -138,23 +137,12 @@ export class FlagForgeClient extends EventEmitter {
 
   private getDefaultVariant(flag: Flag, reason: string, defaultValue: any): EvaluationResult {
     const variant = flag.variants?.find(v => v.id === flag.defaultVariantId);
-     return {
+    return {
       enabled: true,
       value: variant ? variant.value : (flag.type === 'BOOLEAN' ? true : defaultValue),
       variantId: variant?.id,
       reason
     };
-  }
-
-  private hash(userId: string, key: string): number {
-    const seed = `${userId}:${key}`;
-    let hash = 0;
-    for (let i = 0; i < seed.length; i++) {
-      const char = seed.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // overflow
-    }
-    return Math.abs(hash) % 100;
   }
 
   close() {
