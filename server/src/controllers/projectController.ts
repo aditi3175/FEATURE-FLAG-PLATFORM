@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../config/database';
 import { logAudit, computeChanges } from '../services/auditService';
+import { invalidateApiKey, invalidateProjectFlags } from '../services/cache';
 
 /**
  * Generate a cryptographically secure API key
@@ -9,6 +10,17 @@ import { logAudit, computeChanges } from '../services/auditService';
 function generateApiKey(prefix: string = 'ff_prod_'): string {
   const randomBytes = crypto.randomBytes(32).toString('hex');
   return `${prefix}${randomBytes}`;
+}
+
+/**
+ * Remove a deleted project's cached API key and flag lists, so its key
+ * stops working immediately instead of after the 5 minute TTL.
+ * (Cached single flags are left to expire: they're only reachable
+ * through the API key lookup, which now fails.)
+ */
+async function invalidateProjectCache(project: { id: string; apiKey: string }): Promise<void> {
+  await invalidateApiKey(project.apiKey);
+  await invalidateProjectFlags(project.id);
 }
 
 /**
@@ -159,7 +171,8 @@ export async function updateProject(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Update the project
+    // Update the project (name only; the API key and flags are unchanged,
+    // so no cache invalidation is needed)
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
       data: { name },
@@ -231,6 +244,9 @@ export async function deleteProject(req: Request, res: Response): Promise<void> 
       where: { id: projectId },
     });
 
+    // After the delete: the API key must stop working right away
+    await invalidateProjectCache(project);
+
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting project:', error);
@@ -249,11 +265,19 @@ export async function deleteAllProjects(req: Request, res: Response): Promise<vo
       return;
     }
 
+    // Look up the projects first so we know which cache entries to clear
+    const projects = await prisma.project.findMany({
+      where: { userId: req.user.userId },
+      select: { id: true, apiKey: true },
+    });
+
     // Delete all projects belonging to the user
     // Flags will be deleted automatically due to cascade delete in schema
     await prisma.project.deleteMany({
       where: { userId: req.user.userId },
     });
+
+    await Promise.all(projects.map(invalidateProjectCache));
 
     res.status(204).send();
   } catch (error) {

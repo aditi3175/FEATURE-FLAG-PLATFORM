@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../config/database';
-import { getFlag } from '../services/cache';
+import { getFlag, getProjectByApiKey, getSdkFlags, isValidEnvironment } from '../services/cache';
 import { evaluateFlag } from '../services/evaluator';
 import { logSdkEvent } from '../controllers/analyticsController';
 
@@ -8,11 +8,14 @@ const router = Router();
 
 /**
  * GET /api/v1/sdk/flags - Get all flags for SDK (header-based auth)
- * 
+ *
  * Headers:
  *   - x-api-key: string (required)
- * 
- * This endpoint is called by the SDK to fetch all flags for a project
+ * Query:
+ *   - environment: Development | Staging | Production (default: Production)
+ *
+ * Called by the SDKs on startup and on every polling interval.
+ * Response header X-Cache: HIT | MISS shows whether Redis served it.
  */
 router.get('/flags', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -24,39 +27,22 @@ router.get('/flags', async (req: Request, res: Response): Promise<void> => {
     }
 
     const environment = (req.query.environment as string) || 'Production';
+    if (!isValidEnvironment(environment)) {
+      res.status(400).json({ error: 'Invalid environment' });
+      return;
+    }
 
-    // Find project by API key
-    const project = await prisma.project.findUnique({
-      where: { apiKey },
-      include: {
-        flags: {
-          where: {
-            environment: environment,
-          } as any, // Cast to any to bypass stale Prisma types
-          select: {
-            id: true,
-            key: true,
-            description: true,
-            status: true,
-            type: true,
-            rolloutPercentage: true,
-            targetingRules: true, // Cast to any to bypass stale Prisma types
-            variants: true,
-            defaultVariantId: true,
-            offVariantId: true,
-            environment: true,
-          } as any,
-        },
-      },
-    });
-
+    const project = await getProjectByApiKey(apiKey);
     if (!project) {
       res.status(401).json({ error: 'Invalid API key' });
       return;
     }
 
+    const { flags, hit } = await getSdkFlags(project.id, environment);
+
+    res.setHeader('X-Cache', hit ? 'HIT' : 'MISS');
     // Return flags array directly (SDK expects array, not object)
-    res.json(project.flags);
+    res.json(flags);
   } catch (error) {
     console.error('Error fetching flags for SDK:', error);
     res.status(500).json({ error: 'Failed to fetch flags' });
@@ -64,63 +50,46 @@ router.get('/flags', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * POST /api/v1/sdk/evaluate - Evaluate a single flag (backward compatibility)
- * 
- * Headers:
- *   - x-api-key: string (required)
- * 
- * Body:
- *   - flagKey: string (required)
- *   - userId: string (required)
- *   - context: object (optional)
+ * Shared server-side evaluation logic, used by:
+ *   POST /api/v1/sdk/evaluate  (API key in x-api-key header)
+ *   POST /api/evaluate         (legacy, API key in the body)
  */
-router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
+export async function handleEvaluation(
+  res: Response,
+  apiKey: string | undefined,
+  body: { flagKey?: string; userId?: string; environment?: string }
+): Promise<void> {
   try {
-    const apiKey = req.headers['x-api-key'] as string;
-    const { flagKey, userId, context } = req.body;
+    const { flagKey, userId } = body;
+    const environment = body.environment || 'Production';
 
-    // Validation
     if (!apiKey) {
-      res.status(401).json({ 
-        enabled: false, 
-        reason: 'API key is required in x-api-key header' 
-      });
+      res.status(401).json({ enabled: false, reason: 'API key is required' });
       return;
     }
 
     if (!flagKey || !userId) {
-      res.status(400).json({
-        enabled: false,
-        reason: 'flagKey and userId are required',
-      });
+      res.status(400).json({ enabled: false, reason: 'flagKey and userId are required' });
       return;
     }
 
-    // Find project by API key
-    const project = await prisma.project.findUnique({
-      where: { apiKey },
-    });
+    if (!isValidEnvironment(environment)) {
+      res.status(400).json({ enabled: false, reason: 'Invalid environment' });
+      return;
+    }
 
+    const project = await getProjectByApiKey(apiKey);
     if (!project) {
-      res.status(401).json({ 
-        enabled: false, 
-        reason: 'Invalid API key' 
-      });
+      res.status(401).json({ enabled: false, reason: 'Invalid API key' });
       return;
     }
 
-    // Get flag (from cache or database)
-    const flag = await getFlag(project.id, flagKey);
-
+    const flag = await getFlag(project.id, flagKey, environment);
     if (!flag) {
-      res.status(404).json({
-        enabled: false,
-        reason: 'FLAG_NOT_FOUND',
-      });
+      res.status(404).json({ enabled: false, reason: 'FLAG_NOT_FOUND' });
       return;
     }
 
-    // Evaluate flag
     const startTime = Date.now();
     const result = evaluateFlag(
       {
@@ -131,33 +100,40 @@ router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
         targetingRules: flag.targetingRules as any,
         variants: flag.variants as any,
         defaultVariantId: flag.defaultVariantId,
-        offVariantId: flag.offVariantId
+        offVariantId: flag.offVariantId,
       },
       userId
     );
     const latency = Date.now() - startTime;
 
-    // Log evaluation event asynchronously
+    // Log evaluation event asynchronously (don't block the response)
     prisma.evaluationEvent.create({
       data: {
         projectId: project.id,
         flagKey: flag.key,
         result: result.enabled,
-        environment: 'Production', // TODO: Get from request
-        userId: userId,
-        latency: latency,
-        timestamp: new Date()
-      }
-    }).catch(err => console.error('Failed to log SDK evaluation event:', err));
+        environment,
+        userId,
+        latency,
+        timestamp: new Date(),
+      },
+    }).catch(err => console.error('Failed to log evaluation event:', err));
 
     res.json(result);
   } catch (error) {
     console.error('Error evaluating flag:', error);
-    res.status(500).json({
-      enabled: false,
-      reason: 'EVALUATION_ERROR',
-    });
+    res.status(500).json({ enabled: false, reason: 'EVALUATION_ERROR' });
   }
+}
+
+/**
+ * POST /api/v1/sdk/evaluate - Evaluate a single flag
+ *
+ * Headers: x-api-key (required)
+ * Body: flagKey, userId (required), environment (optional)
+ */
+router.post('/evaluate', async (req: Request, res: Response): Promise<void> => {
+  await handleEvaluation(res, req.headers['x-api-key'] as string | undefined, req.body ?? {});
 });
 
 router.post('/events', logSdkEvent);

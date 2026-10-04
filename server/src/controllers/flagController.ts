@@ -1,7 +1,16 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database';
-import { invalidateFlag } from '../services/cache';
+import { invalidateFlag, VALID_ENVIRONMENTS } from '../services/cache';
 import { logAudit, computeChanges } from '../services/auditService';
+
+/**
+ * Cache rule for every write in this file: invalidate AFTER the database write.
+ * If we invalidated first, a request arriving in between could re-cache the
+ * old value, and it would be served until the TTL expired.
+ *
+ * Ownership checks don't depend on req.user being set: if the auth middleware
+ * were ever missing on a route, `undefined !== ownerId` still returns 403.
+ */
 
 /**
  * Get all flags for a specific project
@@ -11,21 +20,18 @@ export async function getFlagsByProject(req: Request, res: Response): Promise<vo
   try {
     const projectId = req.params.projectId as string;
 
-    // Verify user owns the project
-    if (req.user) {
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-      });
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
 
-      if (project.userId !== req.user.userId) {
-        res.status(403).json({ error: 'Access denied' });
-        return;
-      }
+    if (project.userId !== req.user?.userId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
     }
 
     const environment = req.query.env as string | undefined;
@@ -52,10 +58,6 @@ export async function getFlagsByProject(req: Request, res: Response): Promise<vo
  * Create a new flag for a specific project
  * POST /api/projects/:projectId/flags
  */
-  /**
- * Create a new flag for a specific project
- * POST /api/projects/:projectId/flags
- */
 export async function createFlag(req: Request, res: Response): Promise<void> {
   try {
     const projectId = req.params.projectId as string;
@@ -70,8 +72,8 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
     // Validate key format (slug)
     const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
     if (!slugRegex.test(key)) {
-      res.status(400).json({ 
-        error: 'Flag key must be a valid slug (lowercase, hyphens, no spaces)' 
+      res.status(400).json({
+        error: 'Flag key must be a valid slug (lowercase, hyphens, no spaces)'
       });
       return;
     }
@@ -81,28 +83,25 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const validEnvs = ['Development', 'Staging', 'Production'];
     const env = environment || 'Production';
-    if (!validEnvs.includes(env)) {
+    if (!VALID_ENVIRONMENTS.includes(env)) {
       res.status(400).json({ error: 'Invalid environment' });
       return;
     }
 
     // Verify user owns the project
-    if (req.user) {
-      const project = await prisma.project.findUnique({
-        where: { id: projectId },
-      });
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
 
-      if (project.userId !== req.user.userId) {
-        res.status(403).json({ error: 'Access denied' });
-        return;
-      }
+    if (project.userId !== req.user?.userId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
     }
 
     const flag = await prisma.flag.create({
@@ -118,20 +117,21 @@ export async function createFlag(req: Request, res: Response): Promise<void> {
         variants: variants || [],
         defaultVariantId: defaultVariantId,
         offVariantId: offVariantId
-      } as any, 
+      } as any,
     });
 
+    // New flag must show up in the SDKs' cached flag list
+    await invalidateFlag(flag.projectId, flag.environment, flag.key);
+
     // Audit log — fire and forget
-    if (req.user) {
-      logAudit({
-        projectId,
-        userId: req.user.userId,
-        action: 'flag.created',
-        entityId: flag.id,
-        entityName: flag.key,
-        changes: { after: flag },
-      });
-    }
+    logAudit({
+      projectId,
+      userId: req.user!.userId,
+      action: 'flag.created',
+      entityId: flag.id,
+      entityName: flag.key,
+      changes: { after: flag },
+    });
 
     res.status(201).json(flag);
   } catch (error: any) {
@@ -166,11 +166,16 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
     if (key !== undefined) {
       const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
       if (!slugRegex.test(key)) {
-        res.status(400).json({ 
-          error: 'Flag key must be a valid slug (lowercase, hyphens, no spaces)' 
+        res.status(400).json({
+          error: 'Flag key must be a valid slug (lowercase, hyphens, no spaces)'
         });
         return;
       }
+    }
+
+    if (environment !== undefined && !VALID_ENVIRONMENTS.includes(environment)) {
+      res.status(400).json({ error: 'Invalid environment' });
+      return;
     }
 
     // Get flag to verify ownership
@@ -185,7 +190,7 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
     }
 
     // Verify user owns the project
-    if (req.user && existingFlag.project.userId !== req.user.userId) {
+    if (existingFlag.project.userId !== req.user?.userId) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
@@ -208,21 +213,23 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
       data: updateData,
     });
 
-    // Invalidate cache after update
-    await invalidateFlag(flag.projectId, flag.key);
+    // Invalidate the OLD key/environment and the NEW one, so a rename or
+    // environment change doesn't leave a stale entry behind.
+    await invalidateFlag(existingFlag.projectId, existingFlag.environment, existingFlag.key);
+    if (flag.key !== existingFlag.key || flag.environment !== existingFlag.environment) {
+      await invalidateFlag(flag.projectId, flag.environment, flag.key);
+    }
 
     // Audit log — fire and forget
-    if (req.user) {
-      const isToggle = Object.keys(updateData).length === 1 && updateData.status !== undefined;
-      logAudit({
-        projectId: flag.projectId,
-        userId: req.user.userId,
-        action: isToggle ? 'flag.toggled' : 'flag.updated',
-        entityId: flag.id,
-        entityName: flag.key,
-        changes: computeChanges(existingFlag as any, flag as any),
-      });
-    }
+    const isToggle = Object.keys(updateData).length === 1 && updateData.status !== undefined;
+    logAudit({
+      projectId: flag.projectId,
+      userId: req.user!.userId,
+      action: isToggle ? 'flag.toggled' : 'flag.updated',
+      entityId: flag.id,
+      entityName: flag.key,
+      changes: computeChanges(existingFlag as any, flag as any),
+    });
 
     res.json(flag);
   } catch (error: any) {
@@ -230,6 +237,11 @@ export async function updateFlag(req: Request, res: Response): Promise<void> {
 
     if (error.code === 'P2025') {
       res.status(404).json({ error: 'Flag not found' });
+      return;
+    }
+
+    if (error.code === 'P2002') {
+      res.status(409).json({ error: 'A flag with this key already exists in that environment' });
       return;
     }
 
@@ -257,28 +269,27 @@ export async function deleteFlag(req: Request, res: Response): Promise<void> {
     }
 
     // Verify user owns the project
-    if (req.user && flag.project.userId !== req.user.userId) {
+    if (flag.project.userId !== req.user?.userId) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
-
-    await invalidateFlag(flag.projectId, flag.key);
 
     await prisma.flag.delete({
       where: { id: flagId },
     });
 
+    // After the delete, so a concurrent read can't re-cache the deleted flag
+    await invalidateFlag(flag.projectId, flag.environment, flag.key);
+
     // Audit log — fire and forget
-    if (req.user) {
-      logAudit({
-        projectId: flag.projectId,
-        userId: req.user.userId,
-        action: 'flag.deleted',
-        entityId: flag.id,
-        entityName: flag.key,
-        changes: { before: flag },
-      });
-    }
+    logAudit({
+      projectId: flag.projectId,
+      userId: req.user!.userId,
+      action: 'flag.deleted',
+      entityId: flag.id,
+      entityName: flag.key,
+      changes: { before: flag },
+    });
 
     res.status(204).send();
   } catch (error: any) {
@@ -312,7 +323,7 @@ export async function getFlagById(req: Request, res: Response): Promise<void> {
     }
 
     // Verify user owns the project
-    if (req.user && flag.project.userId !== req.user.userId) {
+    if (flag.project.userId !== req.user?.userId) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
@@ -333,8 +344,7 @@ export async function promoteFlag(req: Request, res: Response): Promise<void> {
     const flagId = req.params.flagId as string;
     const { targetEnvironment } = req.body;
 
-    const validEnvs = ['Development', 'Staging', 'Production'];
-    if (!targetEnvironment || !validEnvs.includes(targetEnvironment)) {
+    if (!targetEnvironment || !VALID_ENVIRONMENTS.includes(targetEnvironment)) {
       res.status(400).json({ error: 'Invalid target environment. Must be Development, Staging, or Production.' });
       return;
     }
@@ -351,7 +361,7 @@ export async function promoteFlag(req: Request, res: Response): Promise<void> {
     }
 
     // Verify ownership
-    if (req.user && sourceFlag.project.userId !== req.user.userId) {
+    if (sourceFlag.project.userId !== req.user?.userId) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
@@ -407,10 +417,13 @@ export async function promoteFlag(req: Request, res: Response): Promise<void> {
       });
     }
 
+    // The target environment's cached flag (and flag list) is now stale
+    await invalidateFlag(promotedFlag.projectId, targetEnvironment, promotedFlag.key);
+
     // Audit log
     logAudit({
       projectId: sourceFlag.projectId,
-      userId: req.user?.userId || '',
+      userId: req.user!.userId,
       action: 'flag.promoted',
       entityType: 'flag',
       entityId: promotedFlag.id,
@@ -431,4 +444,3 @@ export async function promoteFlag(req: Request, res: Response): Promise<void> {
     res.status(500).json({ error: 'Failed to promote flag' });
   }
 }
-

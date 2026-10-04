@@ -2,7 +2,11 @@ import Redis from 'ioredis';
 
 let redisClient: Redis | null = null;
 
-if (process.env.REDIS_URL) {
+// DISABLE_CACHE=true runs the server without Redis, even if REDIS_URL is set.
+// Used to benchmark the API with and without caching.
+const cacheDisabled = process.env.DISABLE_CACHE === 'true';
+
+if (process.env.REDIS_URL && !cacheDisabled) {
   redisClient = new Redis(process.env.REDIS_URL, {
     retryStrategy(times) {
       const delay = Math.min(times * 50, 2000);
@@ -12,14 +16,16 @@ if (process.env.REDIS_URL) {
   });
 
   redisClient.on('connect', () => {
-    console.log('✅ Redis connected successfully');
+    console.log('Redis connected successfully');
   });
 
   redisClient.on('error', (err) => {
-    console.error('❌ Redis connection error:', err);
+    console.error('Redis connection error:', err);
   });
+} else if (cacheDisabled) {
+  console.log('Cache disabled (DISABLE_CACHE=true), running without Redis');
 } else {
-  console.log('ℹ️  Redis not configured — running without cache');
+  console.log('Redis not configured, running without cache');
 }
 
 export default redisClient;
