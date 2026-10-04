@@ -4,7 +4,20 @@ export interface FlagForgeConfig {
   apiKey: string;
   apiUrl?: string;
   pollingInterval?: number; // milliseconds, default: 60000 (1 minute)
+  eventFlushInterval?: number; // milliseconds, default: 5000 (5 seconds)
+  environment?: string; // default: 'Production'
 }
+
+interface QueuedEvent {
+  flagKey: string;
+  result: boolean;
+  userId: string;
+  environment: string;
+  timestamp: string;
+}
+
+const MAX_EVENTS_PER_BATCH = 100;
+const MAX_QUEUED_EVENTS = 1000;
 
 export interface Variant {
   id: string;
@@ -57,11 +70,20 @@ export class FlagForgeSDK {
   private pollingTimer?: ReturnType<typeof setInterval>;
   private initialized = false;
   private listeners: Set<() => void> = new Set();
+  private eventQueue: QueuedEvent[] = [];
+  private eventTimer?: ReturnType<typeof setInterval>;
+  private onPageHide = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      this.flushEvents(true);
+    }
+  };
 
   constructor(config: FlagForgeConfig) {
     this.config = {
       apiUrl: 'http://localhost:4000',
       pollingInterval: 60000, // 1 minute
+      eventFlushInterval: 5000, // 5 seconds
+      environment: 'Production',
       ...config,
     };
 
@@ -82,6 +104,16 @@ export class FlagForgeSDK {
       // Start polling for updates
       if (this.config.pollingInterval && this.config.pollingInterval > 0) {
         this.startPolling();
+      }
+
+      // Send queued analytics events in batches
+      if (this.config.eventFlushInterval && this.config.eventFlushInterval > 0) {
+        this.eventTimer = setInterval(() => this.flushEvents(), this.config.eventFlushInterval);
+      }
+
+      // Flush when the tab is hidden or closed so events aren't lost
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', this.onPageHide);
       }
     } catch (error) {
       console.error('FlagForge: Failed to initialize:', error);
@@ -190,6 +222,14 @@ export class FlagForgeSDK {
    * Stop polling for flag updates
    */
   destroy(): void {
+    this.flushEvents(true);
+    if (this.eventTimer) {
+      clearInterval(this.eventTimer);
+      this.eventTimer = undefined;
+    }
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onPageHide);
+    }
     if (this.pollingTimer) {
       clearInterval(this.pollingTimer);
       this.pollingTimer = undefined;
@@ -267,28 +307,50 @@ export class FlagForgeSDK {
   }
 
   /**
-   * Log flag evaluation to analytics backend
+   * Queue a flag evaluation for analytics. Nothing is sent here: events are
+   * sent in batches by flushEvents(), so checking a flag never triggers a
+   * network request.
    */
   private logEvaluation(flagKey: string, result: boolean, userId: string): void {
-    // Fire and forget - don't block flag evaluation on analytics
-    const url = `${this.config.apiUrl}/api/v1/sdk/events`;
-
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.config.apiKey,
-      },
-      body: JSON.stringify({
-        flagKey,
-        result,
-        userId,
-        environment: 'Production',
-      }),
-    }).catch((error) => {
-      // Silently fail analytics - don't impact user experience
-      console.debug('FlagForge: Analytics logging failed:', error);
+    this.eventQueue.push({
+      flagKey,
+      result,
+      userId,
+      environment: this.config.environment ?? 'Production',
+      timestamp: new Date().toISOString(),
     });
+
+    // Bound memory if the server is unreachable: drop the oldest events
+    if (this.eventQueue.length > MAX_QUEUED_EVENTS) {
+      this.eventQueue.splice(0, this.eventQueue.length - MAX_QUEUED_EVENTS);
+    }
+
+    if (this.eventQueue.length >= MAX_EVENTS_PER_BATCH) {
+      this.flushEvents();
+    }
+  }
+
+  /**
+   * Send queued events in batches of up to MAX_EVENTS_PER_BATCH.
+   * keepalive lets the request finish even if the page is closing.
+   * Analytics is best-effort: failed batches are dropped, never retried forever.
+   */
+  flushEvents(keepalive = false): void {
+    while (this.eventQueue.length > 0) {
+      const events = this.eventQueue.splice(0, MAX_EVENTS_PER_BATCH);
+      fetch(`${this.config.apiUrl}/api/v1/sdk/events`, {
+        method: 'POST',
+        keepalive,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.config.apiKey,
+        },
+        body: JSON.stringify({ events }),
+      }).catch((error) => {
+        // Silently fail analytics - don't impact user experience
+        console.debug('FlagForge: Analytics logging failed:', error);
+      });
+    }
   }
 
   /**

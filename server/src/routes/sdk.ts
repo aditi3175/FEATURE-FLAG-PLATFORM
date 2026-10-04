@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import prisma from '../config/database';
 import { getFlag, getProjectByApiKey, getSdkFlags, isValidEnvironment } from '../services/cache';
 import { evaluateFlag } from '../services/evaluator';
 import { logSdkEvent } from '../controllers/analyticsController';
+import { recordEvent } from '../services/eventBuffer';
 
 const router = Router();
 
@@ -59,6 +59,7 @@ export async function handleEvaluation(
   apiKey: string | undefined,
   body: { flagKey?: string; userId?: string; environment?: string }
 ): Promise<void> {
+  const startTime = performance.now();
   try {
     const { flagKey, userId } = body;
     const environment = body.environment || 'Production';
@@ -90,7 +91,6 @@ export async function handleEvaluation(
       return;
     }
 
-    const startTime = Date.now();
     const result = evaluateFlag(
       {
         key: flag.key,
@@ -104,20 +104,21 @@ export async function handleEvaluation(
       },
       userId
     );
-    const latency = Date.now() - startTime;
 
-    // Log evaluation event asynchronously (don't block the response)
-    prisma.evaluationEvent.create({
-      data: {
-        projectId: project.id,
-        flagKey: flag.key,
-        result: result.enabled,
-        environment,
-        userId,
-        latency,
-        timestamp: new Date(),
-      },
-    }).catch(err => console.error('Failed to log evaluation event:', err));
+    // Server processing time in microseconds (API key lookup + flag fetch + evaluation).
+    // performance.now() has sub-millisecond precision; Date.now() would round to 0.
+    const latencyUs = Math.round((performance.now() - startTime) * 1000);
+
+    // Queued and written in batches by the event buffer (no DB write per request)
+    recordEvent({
+      projectId: project.id,
+      flagKey: flag.key,
+      result: result.enabled,
+      environment,
+      userId,
+      latency: latencyUs,
+      timestamp: new Date(),
+    });
 
     res.json(result);
   } catch (error) {

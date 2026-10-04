@@ -72,7 +72,7 @@ model EvaluationEvent {
   flagKey   String   @map("flag_key")
   result    Boolean  @map("evaluation_result") @default(true)
   timestamp DateTime @default(now())
-  latency   Int      @default(0) // Response time in ms
+  latency   Int      @default(0) // Server processing time in microseconds
   environment String @default("Production")
   userId    String?  @map("user_id")
 

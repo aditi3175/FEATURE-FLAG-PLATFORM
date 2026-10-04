@@ -6,18 +6,22 @@
  *   node dist/scripts/seed_benchmark.js
  */
 import 'dotenv/config';
+import bcrypt from 'bcryptjs';
 import prisma from '../config/database';
 
 const API_KEY = 'ff_bench_local_key';
 const FLAG_COUNT = 50;
+const BENCH_EMAIL = 'bench@flagforge.local';
+const BENCH_PASSWORD = 'bench-password-123';
 
 async function main() {
-  // Placeholder password: this account is only an owner for the benchmark data
-  // and is not meant to log in.
+  // Local-only benchmark account, so you can log in and call authenticated
+  // endpoints (like analytics) for the benchmark project.
+  const password = await bcrypt.hash(BENCH_PASSWORD, 10);
   const user = await prisma.user.upsert({
-    where: { email: 'bench@flagforge.local' },
-    update: {},
-    create: { name: 'Benchmark', email: 'bench@flagforge.local', password: 'not-a-login-account' },
+    where: { email: BENCH_EMAIL },
+    update: { password },
+    create: { name: 'Benchmark', email: BENCH_EMAIL, password },
   });
 
   const project = await prisma.project.upsert({
@@ -53,7 +57,10 @@ async function main() {
     });
   }
 
-  console.log(`Seeded project "${project.name}" with ${FLAG_COUNT} flags. API key: ${API_KEY}`);
+  console.log(`Seeded project "${project.name}" with ${FLAG_COUNT} flags.`);
+  console.log(`  Project ID: ${project.id}`);
+  console.log(`  API key:    ${API_KEY}`);
+  console.log(`  Login:      ${BENCH_EMAIL} / ${BENCH_PASSWORD}`);
 }
 
 main()

@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../config/database';
 
 export const getAnalytics = async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user.userId;
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
 
     // Get all projects for the user
     const projects = await prisma.project.findMany({
@@ -14,44 +16,30 @@ export const getAnalytics = async (req: Request, res: Response) => {
     });
 
     const projectIds = projects.map(p => p.id);
-
-    // Get total evaluation count across all user's projects
-    const totalEvaluations = await prisma.evaluationEvent.count({
-      where: {
-        projectId: { in: projectIds }
-      }
-    });
-
-    // Get evaluations in last 24 hours
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentEvaluations = await prisma.evaluationEvent.count({
-      where: {
-        projectId: { in: projectIds },
-        timestamp: { gte: twentyFourHoursAgo }
-      }
-    });
 
-    // Get evaluations by environment
-    const evaluationsByEnv = await prisma.evaluationEvent.groupBy({
-      by: ['environment'],
-      where: {
-        projectId: { in: projectIds }
-      },
-      _count: true
-    });
+    // Independent queries run in parallel
+    const [totalEvaluations, recentEvaluations, evaluationsByEnv, avgLatencyResult] = await Promise.all([
+      prisma.evaluationEvent.count({
+        where: { projectId: { in: projectIds } }
+      }),
+      prisma.evaluationEvent.count({
+        where: { projectId: { in: projectIds }, timestamp: { gte: twentyFourHoursAgo } }
+      }),
+      prisma.evaluationEvent.groupBy({
+        by: ['environment'],
+        where: { projectId: { in: projectIds } },
+        _count: true
+      }),
+      prisma.evaluationEvent.aggregate({
+        where: { projectId: { in: projectIds }, latency: { gt: 0 } }, // only events with a measured latency
+        _avg: { latency: true }
+      }),
+    ]);
 
-    // Calculate average response time (latency)
-    const avgLatencyResult = await prisma.evaluationEvent.aggregate({
-      where: {
-        projectId: { in: projectIds },
-        latency: { gt: 0 } // Only consider events with recorded latency
-      },
-      _avg: {
-        latency: true
-      }
-    });
-    
-    const avgResponseTime = avgLatencyResult._avg.latency ? Math.round(avgLatencyResult._avg.latency) : null;
+    // latency is stored in microseconds; return milliseconds
+    const avgUs = avgLatencyResult._avg.latency;
+    const avgResponseTime = avgUs ? Number((avgUs / 1000).toFixed(2)) : null;
 
     res.json({
       totalEvaluations,
