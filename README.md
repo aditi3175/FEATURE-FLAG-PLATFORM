@@ -18,6 +18,17 @@ Decouple deploy from release: roll features out to a percentage of users, run A/
 
 ![Landing Page](./screenshots/landing.png)
 
+## 🌐 Live Demo
+
+- **Dashboard:** [https://feature-flag-platform-delta.vercel.app](https://feature-flag-platform-delta.vercel.app)
+- **API Health:** [https://flagforge-api.onrender.com/health](https://flagforge-api.onrender.com/health)
+
+### Demo Credentials
+- **Email:** `demo@flagforge.dev`
+- **Password:** `flagforge-demo`
+
+> ⚠️ **Note on Cold Starts:** The backend is hosted on Render's free tier. If the instance has spun down due to inactivity, the first request may take 30–50 seconds to wake up. Subsequent requests run with standard low latency.
+
 ## ✨ Features
 
 | Feature | Description |

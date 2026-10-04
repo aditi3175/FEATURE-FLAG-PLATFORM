@@ -124,6 +124,9 @@ Stop polling and clean up resources.
 sdk.destroy();
 ```
 
+- **0.2.0**: Switched to MurmurHash3 bucketing for exact parity with server and browser SDKs (users may be re-bucketed).
+- **0.1.1**: Initial release.
+
 ## How It Works
 
 ### Deterministic Evaluation
