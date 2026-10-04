@@ -1,6 +1,6 @@
 {
   "name": "flagforge-node-sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Node.js Server-Side SDK for FlagForge",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
